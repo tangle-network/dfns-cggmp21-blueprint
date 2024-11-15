@@ -1,52 +1,32 @@
 [package]
-name = "{{project-name}}"
-version = "0.1.0"
+name = "dfns-cggmp21-blueprint"
+version = "0.1.1"
+description = "A DFNS CGGMP21 Blueprint that can run keygen and signing jobs on demand from the Tangle network"
 edition = "2021"
-description = "{{project-description}}"
-authors = ["{{authors}}"]
-license = "MIT OR Apache-2.0"
-homepage = "{{project-homepage}}"
-repository = "https://github.com/{{gh-username}}/{{project-name}}"
-readme = "README.md"
-categories = ["cryptography", "cryptography::cryptocurrencies"]
-keywords = ["tangle", "blueprint", "avs"]
-rust-version = "1.81"
 
 [dependencies]
-tracing = "0.1"
-async-trait = "0.1"
-color-eyre = "0.6"
-structopt = "0.3.26"
-tokio = { version = "^1", default-features = false, features = ["full"] }
-tracing-subscriber = { version = "0.3", features = ["parking_lot", "env-filter"] }
-
-[dependencies.gadget-sdk]
-version = "0.4.0"
-default-features = false
-features = ["getrandom"]
+gadget-sdk = { git = "https://github.com/tangle-network/gadget/", branch = "utils-for-blueprints" , features = ["std"] }
+color-eyre = { version = "0.6", features = ["tracing-error", "color-spantrace"] }
+tokio = { version = "1.40", default-features = false, features = ["full"] }
+hex = { version = "0.4.3", default-features = false }
+k256 = { version = "0.13.3", default-features = false }
+bincode2 = "2.0.1"
+sp-core = { version = "31.0.0", default-features = false }
+cggmp21 = { git = "https://github.com/LFDT-Lockness/cggmp21", features = ["curve-secp256k1"] }
+rand_chacha = "0.3.1"
+serde = { version = "1.0.214", features = ["derive"] }
+round-based = { version = "0.3.2", features = ["runtime-tokio"] }
+key-share = { git = "https://github.com/LFDT-Lockness/cggmp21", features = ["serde"] }
+tracing-subscriber = "0.3.18"
 
 [build-dependencies]
-blueprint-metadata = "0.1.6"
+blueprint-metadata = { git = "https://github.com/tangle-network/gadget/", branch = "utils-for-blueprints" }
+
+[dev-dependencies]
+blueprint-test-utils = { git = "https://github.com/tangle-network/gadget/", branch = "utils-for-blueprints" }
+cargo-tangle = { git = "https://github.com/tangle-network/gadget/", branch = "utils-for-blueprints" }
+#alloy-primitives = "0.7.2"
 
 [features]
 default = ["std"]
-std = ["gadget-sdk/std"]
-
-[lib]
-path = "src/lib.rs"
-
-[[bin]]
-name = "{{project-name}}"
-path = "src/main.rs"
-
-[package.metadata.blueprint]
-manager = { Evm = "HelloBlueprint" }
-
-[[package.metadata.gadget.Native.sources]]
-owner = "{{gh-username}}"
-repo = "{{project-name}}"
-tag = "0.1.0"
-binaries = [
-    { arch = "Amd64", os = "Linux", name = "amd64-linux-{{project-name}}-gadget" },
-    { arch = "Arm64", os = "Linux", name = "arm64-linux-{{project-name}}-gadget" },
-]
+std = []

@@ -1,27 +1,39 @@
 use color_eyre::Result;
-use {{project-name | snake_case}} as blueprint;
-use gadget_sdk as sdk;
-use sdk::runners::tangle::TangleConfig;
-use sdk::runners::BlueprintRunner;
+use dfns_cggmp21_blueprint::context::DfnsContext;
+use gadget_sdk::info;
+use gadget_sdk::runners::tangle::TangleConfig;
+use gadget_sdk::runners::BlueprintRunner;
+use sp_core::Pair;
 
-#[sdk::main(env)]
-async fn main() -> Result<()> {
-    // Create your service context
-    // Here you can pass any configuration or context that your service needs.
-    let context = blueprint::ServiceContext {
-        config: env.clone(),
-    };
+#[gadget_sdk::main(env)]
+async fn main() {
+    let context = DfnsContext::new(env.clone())?;
 
-    // Create the event handler from the job
-    let say_hello_job = blueprint::SayHelloEventHandler::new(&env, context).await?;
+    info!(
+        "Starting the Blueprint Runner for {} ...",
+        hex::encode(context.identity.public().as_ref())
+    );
 
-    tracing::info!("Starting the event watcher ...");
+    info!("~~~ Executing the DFNS-CGGMP21 blueprint ~~~");
+
     let tangle_config = TangleConfig::default();
-    BlueprintRunner::new(tangle_config, env)
-        .job(say_hello_job)
+    let keygen =
+        dfns_cggmp21_blueprint::keygen::KeygenEventHandler::new(&env, context.clone()).await?;
+
+    let key_refresh =
+        dfns_cggmp21_blueprint::key_refresh::KeyRefreshEventHandler::new(&env, context.clone())
+            .await?;
+
+    let signing =
+        dfns_cggmp21_blueprint::signing::SigningEventHandler::new(&env, context.clone()).await?;
+
+    BlueprintRunner::new(tangle_config, env.clone())
+        .job(keygen)
+        .job(key_refresh)
+        .job(signing)
         .run()
         .await?;
 
-    tracing::info!("Exiting...");
+    info!("Exiting...");
     Ok(())
 }
