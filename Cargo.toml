@@ -22,6 +22,7 @@ serde = { version = "1.0.214", features = ["derive"] }
 round-based = { version = "0.3.2", features = ["runtime-tokio"] }
 key-share = { git = "https://github.com/LFDT-Lockness/cggmp21", features = ["serde"] }
 tracing-subscriber = "0.3.18"
+thiserror = "2.0.3"
 
 [build-dependencies]
 blueprint-metadata = { path = "../gadget/blueprint-metadata" }

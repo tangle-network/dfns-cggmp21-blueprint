@@ -1,4 +1,5 @@
 use crate::context::DfnsContext;
+use cggmp21::key_refresh::KeyRefreshBuilder;
 use cggmp21::security_level::SecurityLevel128;
 use cggmp21::supported_curves::Secp256k1;
 use cggmp21::{ExecutionId, PregeneratedPrimes};
@@ -6,9 +7,9 @@ use color_eyre::eyre::OptionExt;
 use gadget_sdk::event_listener::tangle::jobs::{services_post_processor, services_pre_processor};
 use gadget_sdk::event_listener::tangle::TangleEventListener;
 use gadget_sdk::network::round_based_compat::NetworkDeliveryWrapper;
-use gadget_sdk::network::StreamKey;
 use gadget_sdk::tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled;
 use gadget_sdk::{compute_sha256_hash, job};
+use k256::sha2::Sha256;
 use rand_chacha::rand_core::{RngCore, SeedableRng};
 use round_based::runtime::TokioRuntime;
 use sp_core::ecdsa::Public;
@@ -49,11 +50,12 @@ pub async fn key_refresh(n: u16, context: DfnsContext) -> Result<Vec<u8>, gadget
     );
 
     let mut rng = rand_chacha::ChaChaRng::from_seed(deterministic_hash);
-    let network = context.network_backend.multiplex(StreamKey {
-        task_hash: deterministic_hash,
-        round_id: 0,
-    });
-    let delivery = NetworkDeliveryWrapper::new(network, i as _, deterministic_hash, parties);
+    let delivery = NetworkDeliveryWrapper::new(
+        context.network_backend.clone(),
+        i as _,
+        deterministic_hash,
+        parties,
+    );
     let party = round_based::party::MpcParty::connected(delivery).set_runtime(TokioRuntime);
 
     let key = hex::encode(meta_deterministic_hash);
@@ -66,16 +68,16 @@ pub async fn key_refresh(n: u16, context: DfnsContext) -> Result<Vec<u8>, gadget
         .as_ref()
         .ok_or_eyre("Keygen output not found")?;
 
+    let t = keygen_output.min_signers();
+
     // This generate_pregenerated_orimes function can take awhile to run
     let pregenerated_primes = generate_pregenerated_primes(rng.clone()).await?;
-
     // TODO: parameterize this
-    let result = cggmp21::key_refresh::<Secp256k1, SecurityLevel128>(
+    let result = KeyRefreshBuilder::<Secp256k1, SecurityLevel128, Sha256>::new(
         eid,
         keygen_output,
         pregenerated_primes,
     )
-    .enforce_reliable_broadcast(true)
     .start(&mut rng, party)
     .await
     .map_err(|err| gadget_sdk::Error::Other(err.to_string()))?;

@@ -17,89 +17,123 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-/// The network protocol for the DFNS service
+/// The network protocol version for the DFNS service
 const NETWORK_PROTOCOL: &str = "/dfns/cggmp21/1.0.0";
 
-/// DFNS-CGGMP21 Service Context that holds all the necessary context for the service
-/// to run
-#[derive(Clone, KeystoreContext, TangleClientContext, ServicesContext)]
-pub struct DfnsContext {
-    /// The configuration for the service
-    #[config]
-    pub config: sdk::config::StdGadgetConfiguration,
-    /// The gossip handle for the network
-    pub network_backend: Arc<NetworkMultiplexer>,
-    /// The key-value store for the service
-    pub store: Arc<LocalDatabase<DfnsStore>>,
-    /// Identity
-    pub identity: ecdsa::Pair,
-}
-
+/// Storage structure for DFNS-related data
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct DfnsStore {
+    /// The core key share for the current session
     pub inner: Option<CoreKeyShare<Secp256k1>>,
+    /// Refreshed key share after a refresh operation
     pub refreshed_key: Option<KeyShare<Secp256k1, SecurityLevel128>>,
 }
 
+/// DFNS-CGGMP21 Service Context that holds all the necessary context for the service
+/// to run. This structure implements various traits for keystore, client, and service
+/// functionality.
+#[derive(Clone, KeystoreContext, TangleClientContext, ServicesContext)]
+pub struct DfnsContext {
+    #[config]
+    pub config: sdk::config::StdGadgetConfiguration,
+    pub network_backend: Arc<NetworkMultiplexer>,
+    pub store: Arc<LocalDatabase<DfnsStore>>,
+    pub identity: ecdsa::Pair,
+}
+
+// Core context management implementation
 impl DfnsContext {
-    /// Create a new service context
+    /// Creates a new service context with the provided configuration
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Network initialization fails
+    /// - Configuration is invalid
     pub fn new(config: sdk::config::StdGadgetConfiguration) -> eyre::Result<Self> {
-        let network_config = config.libp2p_network_config(NETWORK_PROTOCOL)?;
+        let network_config = config
+            .libp2p_network_config(NETWORK_PROTOCOL)
+            .map_err(|err| eyre::eyre!("Failed to create network configuration: {err}"))?;
+
         let identity = network_config.ecdsa_key.clone();
         let gossip_handle = sdk::network::setup::start_p2p_network(network_config)
-            .map_err(|e| eyre::eyre!("Failed to start the network: {e:?}"))?;
+            .map_err(|err| eyre::eyre!("Failed to start the P2P network: {err}"))?;
+
         let keystore_dir = PathBuf::from(config.keystore_uri.clone()).join("dfns.json");
+        let store = Arc::new(LocalDatabase::open(keystore_dir));
 
         Ok(Self {
-            store: Arc::new(LocalDatabase::open(keystore_dir)),
+            store,
             identity,
             config,
             network_backend: Arc::new(NetworkMultiplexer::new(gossip_handle)),
         })
     }
 
-    /// Get the key-value store
-    pub fn store(&self) -> Arc<LocalDatabase<DfnsStore>> {
-        self.store.clone()
-    }
-
-    /// Get the configuration
+    /// Returns a reference to the configuration
+    #[inline]
     pub fn config(&self) -> &sdk::config::StdGadgetConfiguration {
         &self.config
     }
 
-    /// Get the network protocol
+    /// Returns a clone of the store handle
+    #[inline]
+    pub fn store(&self) -> Arc<LocalDatabase<DfnsStore>> {
+        self.store.clone()
+    }
+
+    /// Returns the network protocol version
+    #[inline]
     pub fn network_protocol(&self) -> &str {
         NETWORK_PROTOCOL
     }
+}
 
-    /// Get the current blueprint id
+// Protocol-specific implementations
+impl DfnsContext {
+    /// Retrieves the current blueprint ID from the configuration
+    ///
+    /// # Errors
+    /// Returns an error if the blueprint ID is not found in the configuration
     pub fn blueprint_id(&self) -> eyre::Result<u64> {
         self.config()
             .protocol_specific
             .tangle()
             .map(|c| c.blueprint_id)
-            .map_err(|e| eyre::eyre!("Failed to get blueprint id: {e}"))
+            .map_err(|err| eyre::eyre!("Blueprint ID not found in configuration: {err}"))
     }
 
+    /// Retrieves the current party index and operator mapping
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Failed to retrieve operator keys
+    /// - Current party is not found in the operator list
     pub async fn get_party_index_and_operators(
         &self,
     ) -> eyre::Result<(usize, BTreeMap<AccountId32, Public>)> {
         let parties = self.current_service_operators_ecdsa_keys().await?;
         let my_id = self.config.first_sr25519_signer()?.account_id();
-        gadget_sdk::info!(
+
+        gadget_sdk::trace!(
             "Looking for {my_id:?} in parties: {:?}",
             parties.keys().collect::<Vec<_>>()
         );
+
         let index_of_my_id = parties
             .iter()
             .position(|(id, _)| id == &my_id)
-            .ok_or_else(|| eyre::eyre!("Failed to get party index"))?;
+            .ok_or_else(|| eyre::eyre!("Party not found in operator list"))?;
 
         Ok((index_of_my_id, parties))
     }
 
-    /// Get Current Service Operators' ECDSA Keys as a map.
+    /// Retrieves the ECDSA keys for all current service operators
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Failed to connect to the Tangle client
+    /// - Failed to retrieve operator information
+    /// - Missing ECDSA key for any operator
     pub async fn current_service_operators_ecdsa_keys(
         &self,
     ) -> eyre::Result<BTreeMap<AccountId32, ecdsa::Public>> {
@@ -107,30 +141,41 @@ impl DfnsContext {
         let current_blueprint = self.blueprint_id()?;
         let current_service_op = self.current_service_operators(&client).await?;
         let storage = client.storage().at_latest().await?;
+
         let mut map = BTreeMap::new();
         for (operator, _) in current_service_op {
             let addr = api::storage()
                 .services()
                 .operators(current_blueprint, &operator);
-            let maybe_pref = storage.fetch(&addr).await?;
+
+            let maybe_pref = storage.fetch(&addr).await.map_err(|err| {
+                eyre::eyre!("Failed to fetch operator storage for {operator}: {err}")
+            })?;
+
             if let Some(pref) = maybe_pref {
                 map.insert(operator, ecdsa::Public(pref.key));
             } else {
-                return Err(eyre::eyre!(
-                    "Failed to get operator's {operator} public ecdsa key"
-                ));
+                return Err(eyre::eyre!("Missing ECDSA key for operator {operator}"));
             }
         }
 
         Ok(map)
     }
 
-    /// Get the current call id for this job.
-    pub async fn current_call_id(&self) -> Result<u64, eyre::Error> {
+    /// Retrieves the current call ID for this job
+    ///
+    /// # Errors
+    /// Returns an error if failed to retrieve the call ID from storage
+    pub async fn current_call_id(&self) -> eyre::Result<u64> {
         let client = self.tangle_client().await?;
         let addr = api::storage().services().next_job_call_id();
         let storage = client.storage().at_latest().await?;
-        let maybe_call_id = storage.fetch_or_default(&addr).await?;
+
+        let maybe_call_id = storage
+            .fetch_or_default(&addr)
+            .await
+            .map_err(|err| eyre::eyre!("Failed to fetch current call ID: {err}"))?;
+
         Ok(maybe_call_id.saturating_sub(1))
     }
 }

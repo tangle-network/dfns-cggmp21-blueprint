@@ -1,19 +1,18 @@
 use crate::context::DfnsContext;
 use cggmp21::key_share::AnyKeyShare;
 use cggmp21::security_level::SecurityLevel128;
+use cggmp21::signing::SigningBuilder;
 use cggmp21::supported_curves::Secp256k1;
 use cggmp21::{DataToSign, ExecutionId};
 use color_eyre::eyre::OptionExt;
 use gadget_sdk::event_listener::tangle::jobs::{services_post_processor, services_pre_processor};
 use gadget_sdk::event_listener::tangle::TangleEventListener;
 use gadget_sdk::network::round_based_compat::NetworkDeliveryWrapper;
-use gadget_sdk::network::StreamKey;
 use gadget_sdk::random::rand::seq::SliceRandom;
 use gadget_sdk::tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled;
 use gadget_sdk::{compute_sha256_hash, job};
 use k256::sha2::Sha256;
 use rand_chacha::rand_core::SeedableRng;
-use round_based::runtime::TokioRuntime;
 use sp_core::ecdsa::Public;
 use std::collections::BTreeMap;
 
@@ -56,12 +55,13 @@ pub async fn signing(
     );
 
     let mut rng = rand_chacha::ChaChaRng::from_seed(deterministic_hash);
-    let network = context.network_backend.multiplex(StreamKey {
-        task_hash: deterministic_hash,
-        round_id: 0,
-    });
-    let delivery = NetworkDeliveryWrapper::new(network, i as _, deterministic_hash, parties);
-    let party = round_based::party::MpcParty::connected(delivery).set_runtime(TokioRuntime);
+    let delivery = NetworkDeliveryWrapper::new(
+        context.network_backend.clone(),
+        i as _,
+        deterministic_hash,
+        parties,
+    );
+    let party = round_based::party::MpcParty::connected(delivery);
 
     let key = hex::encode(meta_deterministic_hash);
     let keygen_output = context
@@ -76,13 +76,16 @@ pub async fn signing(
     let mut participants = (0..n).collect::<Vec<_>>();
     participants.shuffle(&mut rng);
     let participants = &participants[..usize::from(t)];
-    println!("Signers: {participants:?}");
+    gadget_sdk::info!("Signers: {participants:?}");
     let participants_shares = participants.iter().map(|i| &shares[usize::from(*i)]);
 
     // TODO: Parameterize the Curve type
-    let signing =
-        cggmp21::signing::<Secp256k1, SecurityLevel128>(eid, i as _, participants, &keygen_output)
-            .enforce_reliable_broadcast(true);
+    let signing = SigningBuilder::<Secp256k1, SecurityLevel128, Sha256>::new(
+        eid,
+        i as _,
+        participants,
+        &keygen_output,
+    );
     let message_to_sign = DataToSign::<Secp256k1>::digest::<Sha256>(&message_to_sign);
     let signature = signing
         .sign(&mut rng, party, message_to_sign)

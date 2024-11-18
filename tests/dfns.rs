@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod e2e {
     use api::runtime_types::tangle_primitives::services::field::Field;
-    use api::services::calls::types::call::Args;
     use blueprint_test_utils::test_ext::*;
     use blueprint_test_utils::*;
     use cargo_tangle::deploy::Opts;
@@ -72,7 +71,7 @@ mod e2e {
 
                 // Pass the arguments
                 let n = Field::Uint16(N as u16);
-                let job_args = Args::from([n]);
+                let job_args = vec![n];
 
                 // Next step: submit a job under that service/job id
                 if let Err(err) =
