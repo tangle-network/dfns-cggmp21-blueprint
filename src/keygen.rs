@@ -48,7 +48,7 @@ pub async fn keygen(n: u16, context: DfnsContext) -> Result<Vec<u8>, gadget_sdk:
     let mut rng = rand_chacha::ChaChaRng::from_seed(deterministic_hash);
     let network = context.network_backend.multiplex(StreamKey {
         task_hash: deterministic_hash,
-        round_id: 0,
+        round_id: -1,
     });
     let delivery = NetworkDeliveryWrapper::new(network, i as _, deterministic_hash, parties);
     let party = round_based::party::MpcParty::connected(delivery).set_runtime(TokioRuntime);
@@ -60,6 +60,11 @@ pub async fn keygen(n: u16, context: DfnsContext) -> Result<Vec<u8>, gadget_sdk:
         .await
         .map_err(|err| gadget_sdk::Error::Other(err.to_string()))?;
 
+    gadget_sdk::info!(
+        "Ending DFNS-CGGMP21 Keygen for party {i}, n={n}, eid={}",
+        hex::encode(eid.as_bytes())
+    );
+
     let key = hex::encode(meta_deterministic_hash);
     context.store.set(
         &key,
@@ -70,10 +75,10 @@ pub async fn keygen(n: u16, context: DfnsContext) -> Result<Vec<u8>, gadget_sdk:
     );
 
     let public_key =
-        bincode2::serialize(&result.shared_public_key).expect("Failed to serialize public key");
+        bincode::serialize(&result.shared_public_key).expect("Failed to serialize public key");
     // TODO: Note: Earlier this year, bincode failed to serialize this DirtyKeyShare
     let serializable_share =
-        bincode2::serialize(&result.into_inner()).expect("Failed to serialize share");
+        bincode::serialize(&result.into_inner()).expect("Failed to serialize share");
 
     Ok(public_key)
 }

@@ -4,11 +4,11 @@ pragma solidity >=0.8.13;
 import "contracts/lib/tnt-core/src/BlueprintServiceManagerBase.sol";
 
 /**
- * @title HelloBlueprint
+ * @title DfnsBlueprint
  * @dev This contract is an example of a service blueprint that provides a single service.
  * @dev For all supported hooks, check the `BlueprintServiceManagerBase` contract.
  */
-contract HelloBlueprint is BlueprintServiceManagerBase {
+contract DfnsBlueprint is BlueprintServiceManagerBase {
     /**
      * @dev Hook for service operator registration. Called when a service operator
      * attempts to register with the blueprint.

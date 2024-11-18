@@ -33,7 +33,10 @@ mod e2e {
             .canonicalize()
             .expect("File could not be normalized");
 
-        let manifest_path = base_path.join("Cargo.toml");
+        let manifest_path = base_path
+            .join("Cargo.toml")
+            .canonicalize()
+            .expect("Cargo.toml not found");
 
         let ws_port = tangle.ws_port();
         let http_rpc_url = format!("http://127.0.0.1:{ws_port}");
@@ -57,7 +60,7 @@ mod e2e {
                 // as an operator for the relevant services, and, all gadgets are running
 
                 let keypair = handles[0].sr25519_id().clone();
-                let service = svcs.services.last().unwrap();
+                let service = &svcs.services[KEYGEN_JOB_ID as usize];
 
                 let service_id = service.id;
                 let call_id = get_next_call_id(client)

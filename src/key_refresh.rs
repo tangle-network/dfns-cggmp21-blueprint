@@ -85,10 +85,10 @@ pub async fn key_refresh(n: u16, context: DfnsContext) -> Result<Vec<u8>, gadget
     context.store.set(&key, cggmp21_state);
 
     let public_key =
-        bincode2::serialize(&result.shared_public_key).expect("Failed to serialize public key");
+        bincode::serialize(&result.shared_public_key).expect("Failed to serialize public key");
     // TODO: Note: Earlier this year, bincode failed to serialize this DirtyKeyShare
     let serializable_share =
-        bincode2::serialize(&result.into_inner()).expect("Failed to serialize share");
+        bincode::serialize(&result.into_inner()).expect("Failed to serialize share");
 
     Ok(public_key)
 }

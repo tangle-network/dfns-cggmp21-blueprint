@@ -3,9 +3,10 @@ use cggmp21::supported_curves::Secp256k1;
 use cggmp21::KeyShare;
 use color_eyre::eyre;
 use gadget_sdk as sdk;
-use gadget_sdk::network::{NetworkMultiplexer, StreamKey};
+use gadget_sdk::ext::subxt::tx::Signer;
+use gadget_sdk::network::NetworkMultiplexer;
 use gadget_sdk::store::LocalDatabase;
-use gadget_sdk::subxt_core::ext::sp_core::{ecdsa, keccak_256};
+use gadget_sdk::subxt_core::ext::sp_core::ecdsa;
 use gadget_sdk::subxt_core::utils::AccountId32;
 use key_share::CoreKeyShare;
 use sdk::ctx::{KeystoreContext, ServicesContext, TangleClientContext};
@@ -23,13 +24,13 @@ const NETWORK_PROTOCOL: &str = "/dfns/cggmp21/1.0.0";
 /// to run
 #[derive(Clone, KeystoreContext, TangleClientContext, ServicesContext)]
 pub struct DfnsContext {
-    /// The overreaching configuration for the service
+    /// The configuration for the service
     #[config]
     pub config: sdk::config::StdGadgetConfiguration,
     /// The gossip handle for the network
     pub network_backend: Arc<NetworkMultiplexer>,
     /// The key-value store for the service
-    pub store: Arc<sdk::store::LocalDatabase<DfnsStore>>,
+    pub store: Arc<LocalDatabase<DfnsStore>>,
     /// Identity
     pub identity: ecdsa::Pair,
 }
@@ -85,11 +86,14 @@ impl DfnsContext {
         &self,
     ) -> eyre::Result<(usize, BTreeMap<AccountId32, Public>)> {
         let parties = self.current_service_operators_ecdsa_keys().await?;
-        let ecdsa_id = self.config.first_ecdsa_signer()?.into_inner();
-        let my_id = ecdsa_id.account_id();
+        let my_id = self.config.first_sr25519_signer()?.account_id();
+        gadget_sdk::info!(
+            "Looking for {my_id:?} in parties: {:?}",
+            parties.keys().collect::<Vec<_>>()
+        );
         let index_of_my_id = parties
             .iter()
-            .position(|(id, _)| id == my_id)
+            .position(|(id, _)| id == &my_id)
             .ok_or_else(|| eyre::eyre!("Failed to get party index"))?;
 
         Ok((index_of_my_id, parties))
@@ -128,21 +132,5 @@ impl DfnsContext {
         let storage = client.storage().at_latest().await?;
         let maybe_call_id = storage.fetch_or_default(&addr).await?;
         Ok(maybe_call_id.saturating_sub(1))
-    }
-
-    /// Get the network backend for keygen job
-    pub fn keygen_network_backend(&self, call_id: u64) -> impl sdk::network::Network {
-        self.network_backend.multiplex(StreamKey {
-            task_hash: keccak_256(&[&b"keygen"[..], &call_id.to_le_bytes()[..]].concat()),
-            round_id: -1,
-        })
-    }
-
-    /// Get the network backend for signing job
-    pub fn signing_network_backend(&self, call_id: u64) -> impl sdk::network::Network {
-        self.network_backend.multiplex(StreamKey {
-            task_hash: keccak_256(&[&b"signing"[..], &call_id.to_le_bytes()[..]].concat()),
-            round_id: -1,
-        })
     }
 }
