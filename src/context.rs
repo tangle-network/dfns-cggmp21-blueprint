@@ -9,7 +9,7 @@ use gadget_sdk::store::LocalDatabase;
 use gadget_sdk::subxt_core::ext::sp_core::ecdsa;
 use gadget_sdk::subxt_core::utils::AccountId32;
 use key_share::CoreKeyShare;
-use sdk::ctx::{KeystoreContext, ServicesContext, TangleClientContext};
+use sdk::contexts::{KeystoreContext, ServicesContext, TangleClientContext};
 use sdk::tangle_subxt::tangle_testnet_runtime::api;
 use serde::{Deserialize, Serialize};
 use sp_core::ecdsa::Public;
