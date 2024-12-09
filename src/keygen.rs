@@ -106,11 +106,11 @@ pub async fn keygen(n: u16, context: DfnsContext) -> Result<Vec<u8>, GadgetError
     );
 
     // Serialize the results
-    let public_key = bincode::serialize(&result.shared_public_key)
+    let public_key = serde_json::to_vec(&result.shared_public_key)
         .map_err(|e| KeygenError::SerializationError(e.to_string()))?;
 
     // Serialize the share (currently unused but kept for potential future use)
-    let _serializable_share = bincode::serialize(&result.into_inner())
+    let _serializable_share = serde_json::to_vec(&result.into_inner())
         .map_err(|e| KeygenError::SerializationError(e.to_string()))?;
 
     Ok(public_key)

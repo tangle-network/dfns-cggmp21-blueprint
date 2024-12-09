@@ -99,7 +99,7 @@ pub async fn signing(
         .map_err(|err| gadget_sdk::Error::Other(err.to_string()))?;
 
     let serialized_signature =
-        bincode::serialize(&signature).expect("Failed to serialize signature");
+        serde_json::to_vec(&signature).expect("Failed to serialize signature");
 
     Ok(serialized_signature)
 }
