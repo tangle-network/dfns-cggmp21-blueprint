@@ -25,7 +25,7 @@ async fn main() {
             .await?;
 
     let signing =
-        dfns_cggmp21_blueprint::signing::SigningEventHandler::new(&env, context.clone()).await?;
+        dfns_cggmp21_blueprint::signing::SignEventHandler::new(&env, context.clone()).await?;
 
     BlueprintRunner::new(tangle_config, env.clone())
         .job(keygen)
