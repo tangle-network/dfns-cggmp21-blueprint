@@ -2034,9 +2034,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "blueprint-build-utils"
+version = "0.1.0"
+source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+
+[[package]]
 name = "blueprint-manager"
 version = "0.2.1"
-source = "git+https://github.com/tangle-network/gadget#4471000c84a67300dc68c3a3da95b15b9a1e720f"
+source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -2077,7 +2082,7 @@ dependencies = [
 [[package]]
 name = "blueprint-test-utils"
 version = "0.2.1"
-source = "git+https://github.com/tangle-network/gadget#4471000c84a67300dc68c3a3da95b15b9a1e720f"
+source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
@@ -2087,10 +2092,12 @@ dependencies = [
  "alloy-sol-types",
  "alloy-transport",
  "async-trait",
+ "blueprint-build-utils",
  "blueprint-manager",
  "cargo-tangle",
  "cargo_toml",
  "color-eyre",
+ "dirs",
  "futures",
  "gadget-io",
  "gadget-sdk",
@@ -2098,13 +2105,16 @@ dependencies = [
  "libp2p",
  "log",
  "parking_lot",
+ "reqwest 0.12.9",
  "serde",
+ "serde_json",
  "sp-core",
  "sp-io",
  "subxt",
  "tempfile",
  "testcontainers",
  "thiserror 1.0.69",
+ "tnt-core-bytecode",
  "tokio",
  "tracing",
  "url",
@@ -2351,7 +2361,7 @@ dependencies = [
 [[package]]
 name = "cargo-tangle"
 version = "0.3.2"
-source = "git+https://github.com/tangle-network/gadget#4471000c84a67300dc68c3a3da95b15b9a1e720f"
+source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
 dependencies = [
  "alloy-json-abi",
  "alloy-network",
@@ -3275,6 +3285,7 @@ dependencies = [
 name = "dfns-cggmp21-blueprint"
 version = "0.1.1"
 dependencies = [
+ "blueprint-build-utils",
  "blueprint-metadata",
  "blueprint-test-utils",
  "cargo-tangle",
@@ -4904,7 +4915,7 @@ dependencies = [
 [[package]]
 name = "gadget-blueprint-proc-macro"
 version = "0.5.0"
-source = "git+https://github.com/tangle-network/gadget#4471000c84a67300dc68c3a3da95b15b9a1e720f"
+source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
 dependencies = [
  "gadget-blueprint-proc-macro-core 0.3.0 (git+https://github.com/tangle-network/gadget)",
  "indexmap 2.7.0",
@@ -4928,7 +4939,7 @@ dependencies = [
 [[package]]
 name = "gadget-blueprint-proc-macro-core"
 version = "0.3.0"
-source = "git+https://github.com/tangle-network/gadget#4471000c84a67300dc68c3a3da95b15b9a1e720f"
+source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
 dependencies = [
  "cid",
  "ethereum-types",
@@ -4938,7 +4949,7 @@ dependencies = [
 [[package]]
 name = "gadget-blueprint-serde"
 version = "0.3.0"
-source = "git+https://github.com/tangle-network/gadget#4471000c84a67300dc68c3a3da95b15b9a1e720f"
+source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
 dependencies = [
  "paste",
  "serde",
@@ -4949,7 +4960,7 @@ dependencies = [
 [[package]]
 name = "gadget-context-derive"
 version = "0.3.0"
-source = "git+https://github.com/tangle-network/gadget#4471000c84a67300dc68c3a3da95b15b9a1e720f"
+source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4959,7 +4970,7 @@ dependencies = [
 [[package]]
 name = "gadget-io"
 version = "0.0.5"
-source = "git+https://github.com/tangle-network/gadget#4471000c84a67300dc68c3a3da95b15b9a1e720f"
+source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
 dependencies = [
  "cfg-if",
  "clap",
@@ -4981,7 +4992,7 @@ dependencies = [
 [[package]]
 name = "gadget-sdk"
 version = "0.6.1"
-source = "git+https://github.com/tangle-network/gadget#4471000c84a67300dc68c3a3da95b15b9a1e720f"
+source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
 dependencies = [
  "alloy-contract",
  "alloy-json-abi",
@@ -12153,7 +12164,8 @@ dependencies = [
 [[package]]
 name = "tangle-subxt"
 version = "0.7.1"
-source = "git+https://github.com/tangle-network/tangle#a1dfdccab0d5dc2d9b4dfb7e937b0f1467f5c7d6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16af9ac9fa28eadfded616693fcb19a61055bcf5c42fda07a03b572996bb10e8"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -12387,6 +12399,14 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+
+[[package]]
+name = "tnt-core-bytecode"
+version = "0.1.0"
+source = "git+https://github.com/tangle-network/tnt-core.git?branch=donovan%2Fbytecode#b85cc4f149edf48de413184334dcea5514e064de"
+dependencies = [
+ "serde_json",
+]
 
 [[package]]
 name = "tokio"

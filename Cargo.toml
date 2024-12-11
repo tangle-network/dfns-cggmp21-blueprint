@@ -26,6 +26,7 @@ thiserror = "2.0.3"
 
 [build-dependencies]
 blueprint-metadata = { path = "../gadget/blueprint-metadata" }
+blueprint-build-utils = { git = "https://github.com/tangle-network/gadget" }
 
 [dev-dependencies]
 blueprint-test-utils = { git = "https://github.com/tangle-network/gadget" }

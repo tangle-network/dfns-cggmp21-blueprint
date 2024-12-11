@@ -8,4 +8,7 @@ broadcast = "contracts/broadcast"
 libs = ["contracts/lib"]
 auto_detect_remappings = true
 
+[dependencies]
+tnt-core = "0.1.0"
+
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
