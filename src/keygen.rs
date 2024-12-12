@@ -1,8 +1,7 @@
 use crate::context::{DfnsContext, DfnsStore, KeygenOutput};
 use cggmp21::keygen::ThresholdMsg;
 use cggmp21::{
-    security_level::SecurityLevel128, supported_curves::Secp256k1, ExecutionId, KeyShare,
-    PregeneratedPrimes,
+    security_level::SecurityLevel128, supported_curves::Secp256k1, ExecutionId, PregeneratedPrimes,
 };
 use gadget_sdk::contexts::MPCContext;
 use gadget_sdk::random::rand::rngs::OsRng;
@@ -88,32 +87,9 @@ pub async fn keygen(t: u16, context: DfnsContext) -> Result<Vec<u8>, GadgetError
         .await
         .map_err(|e| KeygenError::MpcError(e.to_string()))?;
 
-    gadget_sdk::info!("Keygen complete, running aux info builder ...");
-
-    let deterministic_hash = compute_sha256_hash!(deterministic_hash, "aux-info");
-    let execution_id = ExecutionId::new(&deterministic_hash);
-    let delivery = NetworkDeliveryWrapper::new(
-        context.network_backend.clone(),
-        party_index as _,
-        deterministic_hash,
-        parties,
-    );
-    let party = MpcParty::connected(delivery);
+    gadget_sdk::info!("[Long task] Running pregenerated primes for party {party_index}");
 
     let pregenerated_primes = generate_pregenerated_primes(rng).await?;
-
-    let aux_info = cggmp21::aux_info_gen(
-        execution_id,
-        party_index as u16,
-        n as u16,
-        pregenerated_primes.clone(),
-    )
-    .start(&mut rng, party)
-    .await
-    .map_err(|e| KeygenError::MpcError(e.to_string()))?;
-
-    let keyshare = KeyShare::from_parts((result.clone(), aux_info))
-        .map_err(|e| KeygenError::AuxInfoError(e.to_string()))?;
 
     gadget_sdk::info!(
         "Ending DFNS-CGGMP21 Keygen for party {party_index}, n={n}, eid={}",
@@ -126,11 +102,11 @@ pub async fn keygen(t: u16, context: DfnsContext) -> Result<Vec<u8>, GadgetError
         &store_key,
         DfnsStore {
             inner: Some(KeygenOutput {
-                keyshare,
                 pregenerated_primes,
                 public_key: result.clone(),
             }),
             refreshed_key: None,
+            keyshare: None,
         },
     );
 

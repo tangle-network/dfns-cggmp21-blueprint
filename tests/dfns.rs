@@ -58,7 +58,7 @@ mod e2e {
             "Submitted KEYGEN job {KEYGEN_JOB_ID} with service ID {service_id} has call id {keygen_call_id}",
         );
 
-                let job_results = wait_for_completion_of_tangle_job(client, service_id, keygen_call_id, T)
+                let job_results = wait_for_completion_of_tangle_job(client, service_id, keygen_call_id, T + 1)
                     .await
                     .expect("Failed to wait for job completion");
 
@@ -92,10 +92,10 @@ mod e2e {
 
                 let key_refresh_call_id = job.call_id;
                 gadget_sdk::info!(
-            "Submitted SIGNING job {SIGN_JOB_ID} with service ID {service_id} has call id {key_refresh_call_id}",
+            "Submitted KEY REFRESH job {SIGN_JOB_ID} with service ID {service_id} has call id {key_refresh_call_id}",
         );
 
-                let job_results = wait_for_completion_of_tangle_job(client, service_id, key_refresh_call_id, T)
+                let job_results = wait_for_completion_of_tangle_job(client, service_id, key_refresh_call_id, T + 1)
                     .await
                     .expect("Failed to wait for job completion");
                 assert_eq!(job_results.service_id, service_id);
@@ -131,10 +131,10 @@ mod e2e {
 
                 let signing_call_id = job.call_id;
                 gadget_sdk::info!(
-            "Submitted SIGNING job {SIGN_JOB_ID} with service ID {service_id} has call id {signing_call_id}",
-        );
+                    "Submitted SIGNING job {SIGN_JOB_ID} with service ID {service_id} has call id {signing_call_id}",
+                );
 
-                let job_results = wait_for_completion_of_tangle_job(client, service_id, signing_call_id, T)
+                let job_results = wait_for_completion_of_tangle_job(client, service_id, signing_call_id, T + 1)
                     .await
                     .expect("Failed to wait for job completion");
                 assert_eq!(job_results.service_id, service_id);

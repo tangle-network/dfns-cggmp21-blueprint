@@ -44,6 +44,13 @@ pub async fn sign(
 
     let (meta_hash, deterministic_hash) =
         crate::keygen::compute_deterministic_hashes(n as u16, blueprint_id, keygen_call_id);
+    let store_key = hex::encode(meta_hash);
+
+    let state = context
+        .store
+        .get(&store_key)
+        .ok_or_eyre("[signing] Keygen output not found in DB")?;
+
     // Even though we are using the keygen hash function (in order to get the store key for the meta_hash value), we need to ensure
     // uniqueness of the EID by adding in more elements to the hash
     let deterministic_hash =
@@ -64,11 +71,7 @@ pub async fn sign(
     );
     let party = round_based::party::MpcParty::connected(delivery);
 
-    let store_key = hex::encode(meta_hash);
-    let key_refresh_output = context
-        .store
-        .get(&store_key)
-        .ok_or_eyre("[signing] Keygen output not found in DB")?
+    let key_refresh_output = state
         .refreshed_key
         .ok_or_eyre("[signing] Keygen output not found")?;
     // Choose `t` signers to perform signing

@@ -426,7 +426,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
- "tower 0.5.1",
+ "tower 0.5.2",
  "tracing",
 ]
 
@@ -472,7 +472,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
- "tower 0.5.1",
+ "tower 0.5.2",
  "tracing",
  "url",
  "wasmtimer",
@@ -674,7 +674,7 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
- "tower 0.5.1",
+ "tower 0.5.2",
  "tracing",
  "url",
  "wasmtimer",
@@ -693,7 +693,7 @@ dependencies = [
  "hyper-util",
  "reqwest 0.12.9",
  "serde_json",
- "tower 0.5.1",
+ "tower 0.5.2",
  "tracing",
  "url",
 ]
@@ -727,7 +727,7 @@ dependencies = [
  "alloy-transport",
  "futures",
  "http 1.2.0",
- "rustls 0.23.19",
+ "rustls 0.23.20",
  "serde_json",
  "tokio",
  "tokio-tungstenite 0.24.0",
@@ -2036,12 +2036,12 @@ dependencies = [
 [[package]]
 name = "blueprint-build-utils"
 version = "0.1.0"
-source = "git+https://github.com/tangle-network/gadget/#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#b695906e0b3698e1570bfe674ea172537a429032"
 
 [[package]]
 name = "blueprint-manager"
 version = "0.2.1"
-source = "git+https://github.com/tangle-network/gadget/#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#b695906e0b3698e1570bfe674ea172537a429032"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -2069,7 +2069,7 @@ dependencies = [
 [[package]]
 name = "blueprint-metadata"
 version = "0.2.0"
-source = "git+https://github.com/tangle-network/gadget/#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#b695906e0b3698e1570bfe674ea172537a429032"
 dependencies = [
  "cargo_metadata",
  "fs2",
@@ -2083,7 +2083,7 @@ dependencies = [
 [[package]]
 name = "blueprint-test-utils"
 version = "0.2.1"
-source = "git+https://github.com/tangle-network/gadget/#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#b695906e0b3698e1570bfe674ea172537a429032"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
@@ -2144,7 +2144,7 @@ dependencies = [
  "hyperlocal",
  "log",
  "pin-project-lite",
- "rustls 0.23.19",
+ "rustls 0.23.20",
  "rustls-native-certs 0.7.3",
  "rustls-pemfile 2.2.0",
  "rustls-pki-types",
@@ -2196,9 +2196,9 @@ dependencies = [
 
 [[package]]
 name = "bstr"
-version = "1.11.0"
+version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a68f1f47cdf0ec8ee4b941b2eee2a80cb796db73118c0dd09ac63fbe405be22"
+checksum = "786a307d683a5bf92e6fd5fd69a7eb613751668d1d8d67d802846dfe367c62c8"
 dependencies = [
  "memchr",
  "regex-automata 0.4.9",
@@ -2362,7 +2362,7 @@ dependencies = [
 [[package]]
 name = "cargo-tangle"
 version = "0.3.2"
-source = "git+https://github.com/tangle-network/gadget/#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#b695906e0b3698e1570bfe674ea172537a429032"
 dependencies = [
  "alloy-json-abi",
  "alloy-network",
@@ -4842,7 +4842,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f2f12607f92c69b12ed746fabf9ca4f5c482cba46679c1a75b874ed7c26adb"
 dependencies = [
  "futures-io",
- "rustls 0.23.19",
+ "rustls 0.23.20",
  "rustls-pki-types",
 ]
 
@@ -4915,7 +4915,7 @@ dependencies = [
 [[package]]
 name = "gadget-blueprint-proc-macro"
 version = "0.5.0"
-source = "git+https://github.com/tangle-network/gadget/#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#b695906e0b3698e1570bfe674ea172537a429032"
 dependencies = [
  "gadget-blueprint-proc-macro-core",
  "indexmap 2.7.0",
@@ -4930,7 +4930,7 @@ dependencies = [
 [[package]]
 name = "gadget-blueprint-proc-macro-core"
 version = "0.3.0"
-source = "git+https://github.com/tangle-network/gadget/#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#b695906e0b3698e1570bfe674ea172537a429032"
 dependencies = [
  "cid",
  "ethereum-types",
@@ -4940,7 +4940,7 @@ dependencies = [
 [[package]]
 name = "gadget-blueprint-serde"
 version = "0.3.0"
-source = "git+https://github.com/tangle-network/gadget/#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#b695906e0b3698e1570bfe674ea172537a429032"
 dependencies = [
  "paste",
  "serde",
@@ -4951,7 +4951,7 @@ dependencies = [
 [[package]]
 name = "gadget-context-derive"
 version = "0.3.0"
-source = "git+https://github.com/tangle-network/gadget/#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#b695906e0b3698e1570bfe674ea172537a429032"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4961,7 +4961,7 @@ dependencies = [
 [[package]]
 name = "gadget-io"
 version = "0.0.5"
-source = "git+https://github.com/tangle-network/gadget/#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#b695906e0b3698e1570bfe674ea172537a429032"
 dependencies = [
  "cfg-if",
  "clap",
@@ -4983,7 +4983,7 @@ dependencies = [
 [[package]]
 name = "gadget-sdk"
 version = "0.6.1"
-source = "git+https://github.com/tangle-network/gadget/#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#b695906e0b3698e1570bfe674ea172537a429032"
 dependencies = [
  "alloy-contract",
  "alloy-json-abi",
@@ -5906,7 +5906,7 @@ dependencies = [
  "http 1.2.0",
  "hyper 1.5.1",
  "hyper-util",
- "rustls 0.23.19",
+ "rustls 0.23.20",
  "rustls-native-certs 0.8.1",
  "rustls-pki-types",
  "tokio",
@@ -6511,7 +6511,7 @@ dependencies = [
  "http 1.2.0",
  "jsonrpsee-core 0.23.2",
  "pin-project",
- "rustls 0.23.19",
+ "rustls 0.23.20",
  "rustls-pki-types",
  "rustls-platform-verifier",
  "soketto 0.8.1",
@@ -7170,7 +7170,7 @@ dependencies = [
  "quinn",
  "rand",
  "ring 0.17.8",
- "rustls 0.23.19",
+ "rustls 0.23.20",
  "socket2",
  "thiserror 1.0.69",
  "tokio",
@@ -7289,7 +7289,7 @@ dependencies = [
  "libp2p-identity",
  "rcgen",
  "ring 0.17.8",
- "rustls 0.23.19",
+ "rustls 0.23.20",
  "rustls-webpki 0.101.7",
  "thiserror 1.0.69",
  "x509-parser",
@@ -7335,7 +7335,7 @@ checksum = "c0ff37bd590ca25063e35af745c343cb7a0271906fb7b37e4813e8f79f00268d"
 dependencies = [
  "bitflags 2.6.0",
  "libc",
- "redox_syscall 0.5.7",
+ "redox_syscall 0.5.8",
 ]
 
 [[package]]
@@ -8618,7 +8618,7 @@ checksum = "1e401f977ab385c9e4e3ab30627d6f26d00e2c73eef317493c4ec6d468726cf8"
 dependencies = [
  "cfg-if",
  "libc",
- "redox_syscall 0.5.7",
+ "redox_syscall 0.5.8",
  "smallvec",
  "windows-targets 0.52.6",
 ]
@@ -9326,7 +9326,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash 2.1.0",
- "rustls 0.23.19",
+ "rustls 0.23.20",
  "socket2",
  "thiserror 2.0.6",
  "tokio",
@@ -9344,7 +9344,7 @@ dependencies = [
  "rand",
  "ring 0.17.8",
  "rustc-hash 2.1.0",
- "rustls 0.23.19",
+ "rustls 0.23.20",
  "rustls-pki-types",
  "slab",
  "thiserror 2.0.6",
@@ -9523,9 +9523,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.5.7"
+version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b6dfecf2c74bce2466cabf93f6664d6998a69eb21e39f4207930065b27b771f"
+checksum = "03a862b389f93e68874fbf580b9de08dd02facb9a788ebadaf4a3fd33cf58834"
 dependencies = [
  "bitflags 2.6.0",
 ]
@@ -10071,9 +10071,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.19"
+version = "0.23.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "934b404430bb06b3fae2cba809eb45a1ab1aecd64491213d7c3301b88393f8d1"
+checksum = "5065c3f250cbd332cd894be57c40fa52387247659b14a2d6041d121547903b1b"
 dependencies = [
  "aws-lc-rs",
  "log",
@@ -10160,7 +10160,7 @@ dependencies = [
  "jni",
  "log",
  "once_cell",
- "rustls 0.23.19",
+ "rustls 0.23.20",
  "rustls-native-certs 0.7.3",
  "rustls-platform-verifier-android",
  "rustls-webpki 0.102.8",
@@ -10623,9 +10623,9 @@ checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
 
 [[package]]
 name = "serde"
-version = "1.0.215"
+version = "1.0.216"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6513c1ad0b11a9376da888e3e0baa0077f1aed55c17f50e7b2397136129fb88f"
+checksum = "0b9781016e935a97e8beecf0c933758c97a5520d32930e460142b4cd80c6338e"
 dependencies = [
  "serde_derive",
 ]
@@ -10641,9 +10641,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.215"
+version = "1.0.216"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad1e866f866923f252f05c889987993144fb74e722403468a4ebd70c3cd756c0"
+checksum = "46f859dbbf73865c6627ed570e78961cd3ac92407a2d117204c49232485da55e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -12466,7 +12466,7 @@ version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f6d0975eaace0cf0fcadee4e4aaa5da15b5c079146f2cffb67c113be122bf37"
 dependencies = [
- "rustls 0.23.19",
+ "rustls 0.23.20",
  "tokio",
 ]
 
@@ -12520,7 +12520,7 @@ checksum = "edc5f74e248dc973e0dbb7b74c7e0d6fcc301c694ff50049504004ef4d0cdcd9"
 dependencies = [
  "futures-util",
  "log",
- "rustls 0.23.19",
+ "rustls 0.23.20",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls 0.26.1",
@@ -12594,14 +12594,14 @@ dependencies = [
 
 [[package]]
 name = "tower"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2873938d487c3cfb9aed7546dc9f2711d867c9f90c46b889989a2cb84eba6b4f"
+checksum = "d039ad9159c98b70ecfd540b2573b97f7f52c3e8d9f8ad57a24b916a536975f9"
 dependencies = [
  "futures-core",
  "futures-util",
  "pin-project-lite",
- "sync_wrapper 0.1.2",
+ "sync_wrapper 1.0.2",
  "tower-layer",
  "tower-service",
 ]
@@ -12817,7 +12817,7 @@ dependencies = [
  "httparse",
  "log",
  "rand",
- "rustls 0.23.19",
+ "rustls 0.23.20",
  "rustls-pki-types",
  "sha1",
  "thiserror 1.0.69",
@@ -13475,7 +13475,7 @@ version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "372d5b87f58ec45c384ba03563b03544dc5fadc3983e434b286913f5b4a9bb6d"
 dependencies = [
- "redox_syscall 0.5.7",
+ "redox_syscall 0.5.8",
  "wasite",
 ]
 
