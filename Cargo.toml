@@ -8,8 +8,7 @@ edition = "2021"
 manager = { Evm = "DfnsBlueprint" }
 
 [dependencies]
-# gadget-sdk = { version = "0.6.1", features = ["std"] }
-gadget-sdk = { git = "https://github.com/tangle-network/gadget", features = ["std"] }
+gadget-sdk = { git = "https://github.com/tangle-network/gadget/", branch = "dec-11-debugging" }
 color-eyre = { version = "0.6", features = ["tracing-error", "color-spantrace"] }
 tokio = { version = "1.40", default-features = false, features = ["full"] }
 hex = { version = "0.4.3", default-features = false }
@@ -19,21 +18,18 @@ sp-core = { version = "31.0.0", default-features = false }
 cggmp21 = { version = "0.5.2", features = ["curve-secp256k1"] }
 rand_chacha = "0.3.1"
 serde = { version = "1.0.214", features = ["derive"] }
-round-based = { version = "0.3.0", features = ["runtime-tokio"] }
+round-based = { version = "0.3.2", features = ["runtime-tokio"] }
 key-share = { version = "0.5.2", features = ["serde"] }
 tracing-subscriber = "0.3.18"
 thiserror = "2.0.3"
 
 [build-dependencies]
-blueprint-metadata = { path = "../gadget/blueprint-metadata" }
+blueprint-metadata = { git = "https://github.com/tangle-network/gadget/", branch = "dec-11-debugging" }
 blueprint-build-utils = { git = "https://github.com/tangle-network/gadget" }
 
 [dev-dependencies]
-blueprint-test-utils = { git = "https://github.com/tangle-network/gadget" }
-cargo-tangle = { git = "https://github.com/tangle-network/gadget" }
-# blueprint-test-utils = { version = "0.2.1", features = ["std"] }
-# cargo-tangle = { version = "0.3.2" }
-#alloy-primitives = "0.7.2"
+blueprint-test-utils = { git = "https://github.com/tangle-network/gadget/", branch = "dec-11-debugging" }
+cargo-tangle = { git = "https://github.com/tangle-network/gadget/", branch = "dec-11-debugging" }
 
 [features]
 default = ["std"]

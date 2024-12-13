@@ -1,10 +1,11 @@
-use crate::context::{DfnsContext, DfnsStore};
+use crate::context::{DfnsContext, DfnsStore, KeygenOutput};
+use cggmp21::keygen::ThresholdMsg;
 use cggmp21::{
-    keygen::{KeygenBuilder, NonThresholdMsg},
-    security_level::SecurityLevel128,
-    supported_curves::Secp256k1,
-    ExecutionId,
+    security_level::SecurityLevel128, supported_curves::Secp256k1, ExecutionId, PregeneratedPrimes,
 };
+use gadget_sdk::contexts::MPCContext;
+use gadget_sdk::random::rand::rngs::OsRng;
+use gadget_sdk::random::RngCore;
 use gadget_sdk::{
     compute_sha256_hash,
     event_listener::tangle::{
@@ -17,14 +18,13 @@ use gadget_sdk::{
     Error as GadgetError,
 };
 use k256::sha2::Sha256;
-use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 use round_based::party::MpcParty;
 use sp_core::ecdsa::Public;
 use std::collections::BTreeMap;
 
 #[job(
     id = 0,
-    params(n),
+    params(t),
     event_listener(
         listener = TangleEventListener<DfnsContext, JobCalled>,
         pre_processor = services_pre_processor,
@@ -34,7 +34,7 @@ use std::collections::BTreeMap;
 /// Runs a distributed key generation (DKG) process using DFNS-CGGMP21 protocol
 ///
 /// # Arguments
-/// * `n` - Number of parties participating in the DKG
+/// * `t` - Threshold
 /// * `context` - The DFNS context containing network and storage configuration
 ///
 /// # Returns
@@ -46,19 +46,7 @@ use std::collections::BTreeMap;
 /// - Failed to get party information
 /// - MPC protocol execution failed
 /// - Serialization of results failed
-pub async fn keygen(n: u16, context: DfnsContext) -> Result<Vec<u8>, GadgetError> {
-    // Get configuration and compute deterministic values
-    let blueprint_id = context
-        .blueprint_id()
-        .map_err(|e| KeygenError::ContextError(e.to_string()))?;
-    let call_id = context
-        .current_call_id()
-        .await
-        .map_err(|e| KeygenError::ContextError(e.to_string()))?;
-
-    let (meta_hash, deterministic_hash) = compute_deterministic_hashes(n, blueprint_id, call_id);
-    let execution_id = ExecutionId::new(&deterministic_hash);
-
+pub async fn keygen(t: u16, context: DfnsContext) -> Result<Vec<u8>, GadgetError> {
     // Setup party information
     let (party_index, operators) = context
         .get_party_index_and_operators()
@@ -70,25 +58,38 @@ pub async fn keygen(n: u16, context: DfnsContext) -> Result<Vec<u8>, GadgetError
         .enumerate()
         .map(|(j, (_, ecdsa))| (j as u16, ecdsa))
         .collect();
+    // Get configuration and compute deterministic values
+    let blueprint_id = context
+        .blueprint_id()
+        .map_err(|e| KeygenError::ContextError(e.to_string()))?;
+    let call_id = context.call_id.expect("Call ID not found");
+    let n = parties.len();
+
+    let (meta_hash, deterministic_hash) =
+        compute_deterministic_hashes(n as u16, blueprint_id, call_id);
+    let execution_id = ExecutionId::new(&deterministic_hash);
 
     gadget_sdk::info!(
-        "Starting DFNS-CGGMP21 Keygen for party {party_index}, n={n}, eid={}",
+        "Starting DFNS-CGGMP21 Keygen #{call_id} for party {party_index}, n={n}, eid={}",
         hex::encode(execution_id.as_bytes())
     );
 
     // Initialize RNG and network
-    let mut rng = ChaCha20Rng::from_seed(deterministic_hash);
-    let delivery = setup_network_party(&context, party_index, deterministic_hash, parties).await;
+    let mut rng = OsRng;
+    let delivery =
+        setup_network_party(&context, party_index, deterministic_hash, parties.clone()).await;
     let party = MpcParty::connected(delivery);
     // Execute the MPC protocol
-    let result = KeygenBuilder::<Secp256k1, SecurityLevel128, Sha256>::new(
-        execution_id,
-        party_index as u16,
-        n,
-    )
-    .start(&mut rng, party)
-    .await
-    .map_err(|e| KeygenError::MpcError(e.to_string()))?;
+    let result = cggmp21::keygen::<Secp256k1>(execution_id, party_index as u16, n as u16)
+        .set_threshold(t)
+        .enforce_reliable_broadcast(false)
+        .start(&mut rng, party)
+        .await
+        .map_err(|e| KeygenError::MpcError(e.to_string()))?;
+
+    gadget_sdk::info!("[Long task] Running pregenerated primes for party {party_index}");
+
+    let pregenerated_primes = generate_pregenerated_primes(rng).await?;
 
     gadget_sdk::info!(
         "Ending DFNS-CGGMP21 Keygen for party {party_index}, n={n}, eid={}",
@@ -100,8 +101,12 @@ pub async fn keygen(n: u16, context: DfnsContext) -> Result<Vec<u8>, GadgetError
     context.store.set(
         &store_key,
         DfnsStore {
-            inner: Some(result.clone()),
+            inner: Some(KeygenOutput {
+                pregenerated_primes,
+                public_key: result.clone(),
+            }),
             refreshed_key: None,
+            keyshare: None,
         },
     );
 
@@ -129,6 +134,9 @@ pub enum KeygenError {
     #[error("MPC protocol error: {0}")]
     MpcError(String),
 
+    #[error("Aux info error: {0}")]
+    AuxInfoError(String),
+
     #[error("Context error: {0}")]
     ContextError(String),
 }
@@ -140,7 +148,11 @@ impl From<KeygenError> for GadgetError {
 }
 
 /// Helper function to compute deterministic hashes for the keygen process
-fn compute_deterministic_hashes(n: u16, blueprint_id: u64, call_id: u64) -> ([u8; 32], [u8; 32]) {
+pub(crate) fn compute_deterministic_hashes(
+    n: u16,
+    blueprint_id: u64,
+    call_id: u64,
+) -> ([u8; 32], [u8; 32]) {
     let meta_hash = compute_sha256_hash!(
         n.to_be_bytes(),
         blueprint_id.to_be_bytes(),
@@ -153,10 +165,10 @@ fn compute_deterministic_hashes(n: u16, blueprint_id: u64, call_id: u64) -> ([u8
     (meta_hash, deterministic_hash)
 }
 
-type NetworkMessage = NonThresholdMsg<Secp256k1, SecurityLevel128, Sha256>;
+type NetworkMessage = ThresholdMsg<Secp256k1, SecurityLevel128, Sha256>;
 
 /// Helper function to setup the network party for MPC
-async fn setup_network_party(
+pub async fn setup_network_party(
     context: &DfnsContext,
     party_index: usize,
     deterministic_hash: [u8; 32],
@@ -168,4 +180,15 @@ async fn setup_network_party(
         deterministic_hash,
         parties,
     )
+}
+
+async fn generate_pregenerated_primes<R: RngCore + Send + 'static>(
+    mut rng: R,
+) -> Result<PregeneratedPrimes, gadget_sdk::Error> {
+    let pregenerated_primes = tokio::task::spawn_blocking(move || {
+        cggmp21::PregeneratedPrimes::<SecurityLevel128>::generate(&mut rng)
+    })
+    .await
+    .map_err(|err| format!("Failed to generate pregenerated primes: {err:?}"))?;
+    Ok(pregenerated_primes)
 }
