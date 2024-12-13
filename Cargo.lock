@@ -2036,12 +2036,17 @@ dependencies = [
 [[package]]
 name = "blueprint-build-utils"
 version = "0.1.0"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#85beac446d03908de0bc7005a34d8efe8c518e37"
+
+[[package]]
+name = "blueprint-build-utils"
+version = "0.1.0"
 source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
 
 [[package]]
 name = "blueprint-manager"
 version = "0.2.1"
-source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#85beac446d03908de0bc7005a34d8efe8c518e37"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -2069,10 +2074,11 @@ dependencies = [
 [[package]]
 name = "blueprint-metadata"
 version = "0.2.0"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#85beac446d03908de0bc7005a34d8efe8c518e37"
 dependencies = [
  "cargo_metadata",
  "fs2",
- "gadget-blueprint-proc-macro-core 0.3.0",
+ "gadget-blueprint-proc-macro-core",
  "rustdoc-types",
  "serde",
  "serde_json",
@@ -2082,7 +2088,7 @@ dependencies = [
 [[package]]
 name = "blueprint-test-utils"
 version = "0.2.1"
-source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#85beac446d03908de0bc7005a34d8efe8c518e37"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
@@ -2092,7 +2098,7 @@ dependencies = [
  "alloy-sol-types",
  "alloy-transport",
  "async-trait",
- "blueprint-build-utils",
+ "blueprint-build-utils 0.1.0 (git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging)",
  "blueprint-manager",
  "cargo-tangle",
  "cargo_toml",
@@ -2361,7 +2367,7 @@ dependencies = [
 [[package]]
 name = "cargo-tangle"
 version = "0.3.2"
-source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#85beac446d03908de0bc7005a34d8efe8c518e37"
 dependencies = [
  "alloy-json-abi",
  "alloy-network",
@@ -2375,7 +2381,7 @@ dependencies = [
  "clap-cargo",
  "color-eyre",
  "escargot",
- "gadget-blueprint-proc-macro-core 0.3.0 (git+https://github.com/tangle-network/gadget)",
+ "gadget-blueprint-proc-macro-core",
  "gadget-sdk",
  "hex",
  "k256",
@@ -3285,7 +3291,7 @@ dependencies = [
 name = "dfns-cggmp21-blueprint"
 version = "0.1.1"
 dependencies = [
- "blueprint-build-utils",
+ "blueprint-build-utils 0.1.0 (git+https://github.com/tangle-network/gadget)",
  "blueprint-metadata",
  "blueprint-test-utils",
  "cargo-tangle",
@@ -4915,9 +4921,9 @@ dependencies = [
 [[package]]
 name = "gadget-blueprint-proc-macro"
 version = "0.5.0"
-source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#85beac446d03908de0bc7005a34d8efe8c518e37"
 dependencies = [
- "gadget-blueprint-proc-macro-core 0.3.0 (git+https://github.com/tangle-network/gadget)",
+ "gadget-blueprint-proc-macro-core",
  "indexmap 2.7.0",
  "itertools 0.13.0",
  "parking_lot",
@@ -4930,16 +4936,7 @@ dependencies = [
 [[package]]
 name = "gadget-blueprint-proc-macro-core"
 version = "0.3.0"
-dependencies = [
- "cid",
- "ethereum-types",
- "serde",
-]
-
-[[package]]
-name = "gadget-blueprint-proc-macro-core"
-version = "0.3.0"
-source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#85beac446d03908de0bc7005a34d8efe8c518e37"
 dependencies = [
  "cid",
  "ethereum-types",
@@ -4949,7 +4946,7 @@ dependencies = [
 [[package]]
 name = "gadget-blueprint-serde"
 version = "0.3.0"
-source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#85beac446d03908de0bc7005a34d8efe8c518e37"
 dependencies = [
  "paste",
  "serde",
@@ -4960,7 +4957,7 @@ dependencies = [
 [[package]]
 name = "gadget-context-derive"
 version = "0.3.0"
-source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#85beac446d03908de0bc7005a34d8efe8c518e37"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4970,7 +4967,7 @@ dependencies = [
 [[package]]
 name = "gadget-io"
 version = "0.0.5"
-source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#85beac446d03908de0bc7005a34d8efe8c518e37"
 dependencies = [
  "cfg-if",
  "clap",
@@ -4992,7 +4989,7 @@ dependencies = [
 [[package]]
 name = "gadget-sdk"
 version = "0.6.1"
-source = "git+https://github.com/tangle-network/gadget#12da32de5136a2d22db0bc1581707a3e3bfb44f2"
+source = "git+https://github.com/tangle-network/gadget/?branch=dec-11-debugging#85beac446d03908de0bc7005a34d8efe8c518e37"
 dependencies = [
  "alloy-contract",
  "alloy-json-abi",
@@ -5023,7 +5020,7 @@ dependencies = [
  "failure",
  "futures",
  "gadget-blueprint-proc-macro",
- "gadget-blueprint-proc-macro-core 0.3.0 (git+https://github.com/tangle-network/gadget)",
+ "gadget-blueprint-proc-macro-core",
  "gadget-blueprint-serde",
  "gadget-context-derive",
  "gadget-io",
