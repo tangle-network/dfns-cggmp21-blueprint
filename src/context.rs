@@ -4,7 +4,6 @@ use cggmp21::{KeyShare, PregeneratedPrimes};
 use color_eyre::eyre;
 use gadget_sdk as sdk;
 use gadget_sdk::contexts::{KeystoreContext, MPCContext, ServicesContext, TangleClientContext};
-use gadget_sdk::ext::subxt::tx::Signer;
 use gadget_sdk::network::NetworkMultiplexer;
 use gadget_sdk::store::LocalDatabase;
 use gadget_sdk::subxt_core::ext::sp_core::ecdsa;
