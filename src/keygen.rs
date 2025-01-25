@@ -1,28 +1,27 @@
 use crate::context::{DfnsContext, DfnsStore, KeygenOutput};
+use blueprint_sdk::contexts::services::ServicesContext;
+use blueprint_sdk::contexts::tangle::TangleClientContext;
+use blueprint_sdk::crypto::tangle_pair_signer::sp_core::ecdsa::Public;
+use blueprint_sdk::event_listeners::tangle::events::TangleEventListener;
+use blueprint_sdk::event_listeners::tangle::services::{
+    services_post_processor, services_pre_processor,
+};
+use blueprint_sdk::logging::info;
+use blueprint_sdk::macros::ext::clients::GadgetServicesClient;
+use blueprint_sdk::networking::round_based_compat::NetworkDeliveryWrapper;
+use blueprint_sdk::std::rand::rngs::OsRng;
+use blueprint_sdk::std::rand::RngCore;
+use blueprint_sdk::tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled;
+use blueprint_sdk::{tokio, Error};
 use cggmp21::keygen::ThresholdMsg;
 use cggmp21::{
     security_level::SecurityLevel128, supported_curves::Secp256k1, ExecutionId, PregeneratedPrimes,
 };
-use gadget_sdk::contexts::MPCContext;
-use gadget_sdk::random::rand::rngs::OsRng;
-use gadget_sdk::random::RngCore;
-use gadget_sdk::{
-    compute_sha256_hash,
-    event_listener::tangle::{
-        jobs::{services_post_processor, services_pre_processor},
-        TangleEventListener,
-    },
-    job,
-    network::round_based_compat::NetworkDeliveryWrapper,
-    tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled,
-    Error as GadgetError,
-};
 use k256::sha2::Sha256;
 use round_based::party::MpcParty;
-use sp_core::ecdsa::Public;
 use std::collections::BTreeMap;
 
-#[job(
+#[blueprint_sdk::job(
     id = 0,
     params(t),
     event_listener(
@@ -38,7 +37,7 @@ use std::collections::BTreeMap;
 /// * `context` - The DFNS context containing network and storage configuration
 ///
 /// # Returns
-/// Returns the generated public key as a byte vector on success
+/// The generated public key as a byte vector on success
 ///
 /// # Errors
 /// Returns an error if:
@@ -46,9 +45,11 @@ use std::collections::BTreeMap;
 /// - Failed to get party information
 /// - MPC protocol execution failed
 /// - Serialization of results failed
-pub async fn keygen(t: u16, context: DfnsContext) -> Result<Vec<u8>, GadgetError> {
+pub async fn keygen(t: u16, context: DfnsContext) -> Result<Vec<u8>, Error> {
     // Setup party information
     let (party_index, operators) = context
+        .tangle_client()
+        .await?
         .get_party_index_and_operators()
         .await
         .map_err(|e| KeygenError::ContextError(e.to_string()))?;
@@ -60,7 +61,10 @@ pub async fn keygen(t: u16, context: DfnsContext) -> Result<Vec<u8>, GadgetError
         .collect();
     // Get configuration and compute deterministic values
     let blueprint_id = context
+        .tangle_client()
+        .await?
         .blueprint_id()
+        .await
         .map_err(|e| KeygenError::ContextError(e.to_string()))?;
     let call_id = context.call_id.expect("Call ID not found");
     let n = parties.len();
@@ -69,7 +73,7 @@ pub async fn keygen(t: u16, context: DfnsContext) -> Result<Vec<u8>, GadgetError
         compute_deterministic_hashes(n as u16, blueprint_id, call_id);
     let execution_id = ExecutionId::new(&deterministic_hash);
 
-    gadget_sdk::info!(
+    info!(
         "Starting DFNS-CGGMP21 Keygen #{call_id} for party {party_index}, n={n}, eid={}",
         hex::encode(execution_id.as_bytes())
     );
@@ -87,11 +91,11 @@ pub async fn keygen(t: u16, context: DfnsContext) -> Result<Vec<u8>, GadgetError
         .await
         .map_err(|e| KeygenError::MpcError(e.to_string()))?;
 
-    gadget_sdk::info!("[Long task] Running pregenerated primes for party {party_index}");
+    info!("[Long task] Running pregenerated primes for party {party_index}");
 
     let pregenerated_primes = generate_pregenerated_primes(rng).await?;
 
-    gadget_sdk::info!(
+    info!(
         "Ending DFNS-CGGMP21 Keygen for party {party_index}, n={n}, eid={}",
         hex::encode(execution_id.as_bytes())
     );
@@ -141,10 +145,25 @@ pub enum KeygenError {
     ContextError(String),
 }
 
-impl From<KeygenError> for GadgetError {
+impl From<KeygenError> for Error {
     fn from(err: KeygenError) -> Self {
-        GadgetError::Other(err.to_string())
+        Error::Other(err.to_string())
     }
+}
+
+#[macro_export]
+macro_rules! compute_sha256_hash {
+    ($($data:expr),*) => {
+        {
+            use k256::sha2::{Digest, Sha256};
+            let mut hasher = Sha256::default();
+            $(hasher.update($data);)*
+            let result = hasher.finalize();
+            let mut hash = [0u8; 32];
+            hash.copy_from_slice(result.as_slice());
+            hash
+        }
+    };
 }
 
 /// Helper function to compute deterministic hashes for the keygen process
@@ -167,7 +186,7 @@ pub(crate) fn compute_deterministic_hashes(
 
 type NetworkMessage = ThresholdMsg<Secp256k1, SecurityLevel128, Sha256>;
 
-/// Helper function to setup the network party for MPC
+/// Helper function to set up the network party for MPC
 pub async fn setup_network_party(
     context: &DfnsContext,
     party_index: usize,
@@ -184,7 +203,7 @@ pub async fn setup_network_party(
 
 async fn generate_pregenerated_primes<R: RngCore + Send + 'static>(
     mut rng: R,
-) -> Result<PregeneratedPrimes, gadget_sdk::Error> {
+) -> Result<PregeneratedPrimes, Error> {
     let pregenerated_primes = tokio::task::spawn_blocking(move || {
         cggmp21::PregeneratedPrimes::<SecurityLevel128>::generate(&mut rng)
     })

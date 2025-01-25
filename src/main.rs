@@ -1,11 +1,11 @@
+use blueprint_sdk::crypto::tangle_pair_signer::sp_core::Pair;
+use blueprint_sdk::logging::info;
+use blueprint_sdk::runners::core::runner::BlueprintRunner;
+use blueprint_sdk::runners::tangle::tangle::TangleConfig;
 use color_eyre::Result;
 use dfns_cggmp21_blueprint::context::DfnsContext;
-use gadget_sdk::info;
-use gadget_sdk::runners::tangle::TangleConfig;
-use gadget_sdk::runners::BlueprintRunner;
-use sp_core::Pair;
 
-#[gadget_sdk::main(env)]
+#[blueprint_sdk::main(env)]
 async fn main() {
     let context = DfnsContext::new(env.clone())?;
 

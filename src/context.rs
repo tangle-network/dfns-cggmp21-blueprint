@@ -1,12 +1,15 @@
+use blueprint_sdk::config::GadgetConfiguration;
+use blueprint_sdk::crypto::tangle_pair_signer::sp_core::ecdsa;
+use blueprint_sdk::macros::contexts::{
+    KeystoreContext, P2pContext, ServicesContext, TangleClientContext,
+};
+use blueprint_sdk::networking::networking::NetworkMultiplexer;
+use blueprint_sdk::networking::setup::start_p2p_network;
+use blueprint_sdk::stores::local_database::LocalDatabase;
 use cggmp21::security_level::SecurityLevel128;
 use cggmp21::supported_curves::Secp256k1;
 use cggmp21::{KeyShare, PregeneratedPrimes};
 use color_eyre::eyre;
-use gadget_sdk as sdk;
-use gadget_sdk::contexts::{KeystoreContext, MPCContext, ServicesContext, TangleClientContext};
-use gadget_sdk::network::NetworkMultiplexer;
-use gadget_sdk::store::LocalDatabase;
-use gadget_sdk::subxt_core::ext::sp_core::ecdsa;
 use key_share::CoreKeyShare;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -35,10 +38,10 @@ pub struct KeygenOutput {
 /// DFNS-CGGMP21 Service Context that holds all the necessary context for the service
 /// to run. This structure implements various traits for keystore, client, and service
 /// functionality.
-#[derive(Clone, KeystoreContext, TangleClientContext, ServicesContext, MPCContext)]
+#[derive(Clone, KeystoreContext, TangleClientContext, ServicesContext, P2pContext)]
 pub struct DfnsContext {
     #[config]
-    pub config: sdk::config::StdGadgetConfiguration,
+    pub config: GadgetConfiguration,
     pub network_backend: Arc<NetworkMultiplexer>,
     pub store: Arc<LocalDatabase<DfnsStore>>,
     pub identity: ecdsa::Pair,
@@ -54,13 +57,14 @@ impl DfnsContext {
     /// Returns an error if:
     /// - Network initialization fails
     /// - Configuration is invalid
-    pub fn new(config: sdk::config::StdGadgetConfiguration) -> eyre::Result<Self> {
+    pub fn new(config: GadgetConfiguration) -> eyre::Result<Self> {
         let network_config = config
             .libp2p_network_config(NETWORK_PROTOCOL)
             .map_err(|err| eyre::eyre!("Failed to create network configuration: {err}"))?;
 
-        let identity = network_config.ecdsa_key.clone();
-        let gossip_handle = sdk::network::setup::start_p2p_network(network_config)
+        let identity = network_config.identity.clone();
+        let identity = identity.try_into_ecdsa()?;
+        let gossip_handle = start_p2p_network(network_config)
             .map_err(|err| eyre::eyre!("Failed to start the P2P network: {err}"))?;
 
         let keystore_dir = PathBuf::from(config.keystore_uri.clone()).join("dfns.json");

@@ -1,24 +1,29 @@
+use crate::compute_sha256_hash;
 use crate::context::DfnsContext;
 use crate::keygen::KeygenError;
+use blueprint_sdk::contexts::tangle::TangleClientContext;
+use blueprint_sdk::crypto::tangle_pair_signer::sp_core::ecdsa::Public;
+use blueprint_sdk::event_listeners::tangle::events::TangleEventListener;
+use blueprint_sdk::event_listeners::tangle::services::{
+    services_post_processor, services_pre_processor,
+};
+use blueprint_sdk::logging::info;
+use blueprint_sdk::macros::ext::clients::GadgetServicesClient;
+use blueprint_sdk::networking::round_based_compat::NetworkDeliveryWrapper;
+use blueprint_sdk::std::rand::rngs::OsRng;
+use blueprint_sdk::tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled;
+use blueprint_sdk::Error;
 use cggmp21::key_refresh::{AuxOnlyMsg, KeyRefreshBuilder};
 use cggmp21::security_level::SecurityLevel128;
 use cggmp21::supported_curves::Secp256k1;
 use cggmp21::{ExecutionId, KeyShare};
 use color_eyre::eyre::OptionExt;
-use gadget_sdk::contexts::MPCContext;
-use gadget_sdk::event_listener::tangle::jobs::{services_post_processor, services_pre_processor};
-use gadget_sdk::event_listener::tangle::TangleEventListener;
-use gadget_sdk::network::round_based_compat::NetworkDeliveryWrapper;
-use gadget_sdk::tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled;
-use gadget_sdk::{compute_sha256_hash, job};
 use k256::sha2::Sha256;
-use rand_chacha::rand_core::OsRng;
 use round_based::runtime::TokioRuntime;
 use round_based::MpcParty;
-use sp_core::ecdsa::Public;
 use std::collections::BTreeMap;
 
-#[job(
+#[blueprint_sdk::job(
     id = 1,
     params(keygen_call_id),
     event_listener(
@@ -28,23 +33,24 @@ use std::collections::BTreeMap;
     ),
 )]
 /// Runs a [t; n] keygen using DFNS-CGGMP21. Returns the public key
-pub async fn key_refresh(
-    keygen_call_id: u64,
-    context: DfnsContext,
-) -> Result<Vec<u8>, gadget_sdk::Error> {
-    let (i, operators) = context.get_party_index_and_operators().await?;
+pub async fn key_refresh(keygen_call_id: u64, context: DfnsContext) -> Result<Vec<u8>, Error> {
+    let (i, operators) = context
+        .tangle_client()
+        .await?
+        .get_party_index_and_operators()
+        .await?;
     let parties: BTreeMap<u16, Public> = operators
         .into_iter()
         .enumerate()
         .map(|(j, (_, ecdsa))| (j as u16, ecdsa))
         .collect();
-    let blueprint_id = context.blueprint_id()?;
+    let blueprint_id = context.tangle_client().await?.blueprint_id().await?;
     let call_id = context.call_id.expect("Call ID not found");
     let n = parties.len();
     let (meta_hash, deterministic_hash) =
         crate::keygen::compute_deterministic_hashes(n as u16, blueprint_id, keygen_call_id);
     let store_key = hex::encode(meta_hash);
-    gadget_sdk::info!("DFNS-Refresh: Store key for {i}: {store_key}");
+    info!("DFNS-Refresh: Store key for {i}: {store_key}");
     let mut state = context
         .store
         .get(&store_key)
@@ -65,7 +71,7 @@ pub async fn key_refresh(
     let keygen_result = keygen_output.public_key.clone();
     let party = MpcParty::connected(delivery);
 
-    gadget_sdk::info!(
+    info!(
         "Starting DFNS-CGGMP21 AUX/Key Refresh #{call_id} for party {i}, n={n}, eid={}",
         hex::encode(execution_id.as_bytes())
     );
@@ -96,7 +102,7 @@ pub async fn key_refresh(
 
     let eid = ExecutionId::new(&deterministic_hash);
 
-    gadget_sdk::info!(
+    info!(
         "Starting DFNS-CGGMP21 Key Refresh #{call_id} for party {i}, n={n}, eid={}",
         hex::encode(eid.as_bytes())
     );
@@ -116,7 +122,6 @@ pub async fn key_refresh(
         .as_ref()
         .ok_or_eyre("[key-refresh] Keygen output not found")?;
 
-    // This generate_pregenerated_orimes function can take awhile to run
     let pregenerated_primes = keygen_output.pregenerated_primes.clone();
 
     let t = keygen_output.public_key.min_signers();
@@ -129,7 +134,7 @@ pub async fn key_refresh(
     )
     .start(&mut rng, party)
     .await
-    .map_err(|err| gadget_sdk::Error::Other(err.to_string()))?;
+    .map_err(|err| Error::Other(err.to_string()))?;
 
     // Refreshed key needs to be saved, that way we can begin signing
     state.refreshed_key = Some(result.clone());

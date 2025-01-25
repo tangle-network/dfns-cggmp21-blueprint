@@ -1,23 +1,28 @@
+use crate::compute_sha256_hash;
 use crate::context::DfnsContext;
+use blueprint_sdk::contexts::tangle::TangleClientContext;
+use blueprint_sdk::crypto::tangle_pair_signer::sp_core::ecdsa::Public;
+use blueprint_sdk::event_listeners::tangle::events::TangleEventListener;
+use blueprint_sdk::event_listeners::tangle::services::{
+    services_post_processor, services_pre_processor,
+};
+use blueprint_sdk::logging::info;
+use blueprint_sdk::macros::ext::clients::GadgetServicesClient;
+use blueprint_sdk::networking::round_based_compat::NetworkDeliveryWrapper;
+use blueprint_sdk::std::rand::rngs::OsRng;
+use blueprint_sdk::std::rand::seq::SliceRandom;
+use blueprint_sdk::tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled;
+use blueprint_sdk::Error;
 use cggmp21::key_share::AnyKeyShare;
 use cggmp21::security_level::SecurityLevel128;
 use cggmp21::signing::SigningBuilder;
 use cggmp21::supported_curves::Secp256k1;
 use cggmp21::{DataToSign, ExecutionId};
 use color_eyre::eyre::OptionExt;
-use gadget_sdk::contexts::MPCContext;
-use gadget_sdk::event_listener::tangle::jobs::{services_post_processor, services_pre_processor};
-use gadget_sdk::event_listener::tangle::TangleEventListener;
-use gadget_sdk::network::round_based_compat::NetworkDeliveryWrapper;
-use gadget_sdk::random::rand::rngs::OsRng;
-use gadget_sdk::random::rand::seq::SliceRandom;
-use gadget_sdk::tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled;
-use gadget_sdk::{compute_sha256_hash, job};
 use k256::sha2::Sha256;
-use sp_core::ecdsa::Public;
 use std::collections::BTreeMap;
 
-#[job(
+#[blueprint_sdk::job(
     id = 2,
     params(keygen_call_id, message_to_sign),
     event_listener(
@@ -31,14 +36,18 @@ pub async fn sign(
     keygen_call_id: u64,
     message_to_sign: Vec<u8>,
     context: DfnsContext,
-) -> Result<Vec<u8>, gadget_sdk::Error> {
-    let (i, operators) = context.get_party_index_and_operators().await?;
+) -> Result<Vec<u8>, Error> {
+    let (i, operators) = context
+        .tangle_client()
+        .await?
+        .get_party_index_and_operators()
+        .await?;
     let parties: BTreeMap<u16, Public> = operators
         .into_iter()
         .enumerate()
         .map(|(j, (_, ecdsa))| (j as u16, ecdsa))
         .collect();
-    let blueprint_id = context.blueprint_id()?;
+    let blueprint_id = context.tangle_client().await?.blueprint_id().await?;
     let call_id = context.call_id.expect("Call ID not found");
     let n = parties.len();
 
@@ -57,7 +66,7 @@ pub async fn sign(
         compute_sha256_hash!(deterministic_hash, call_id.to_be_bytes(), "dfns-signing");
     let eid = ExecutionId::new(&deterministic_hash);
 
-    gadget_sdk::info!(
+    info!(
         "Starting DFNS-CGGMP21 Signing #{call_id} for party {i}, n={n}, eid={}",
         hex::encode(eid.as_bytes())
     );
@@ -80,7 +89,7 @@ pub async fn sign(
     let mut participants = (0..n).collect::<Vec<_>>();
     participants.shuffle(&mut rng);
     let participants = &participants[..usize::from(t)];
-    gadget_sdk::info!("Signers: {participants:?}");
+    info!("Signers: {participants:?}");
     let participants_shares = participants.iter().map(|i| &shares[*i]);
     let participants = participants.iter().map(|r| *r as u16).collect::<Vec<u16>>();
 
@@ -95,13 +104,13 @@ pub async fn sign(
     let signature = signing
         .sign(&mut rng, party, message_to_sign)
         .await
-        .map_err(|err| gadget_sdk::Error::Other(err.to_string()))?;
+        .map_err(|err| Error::Other(err.to_string()))?;
 
     let public_key = &key_refresh_output.shared_public_key;
 
     signature
         .verify(public_key, &message_to_sign)
-        .map_err(|err| gadget_sdk::Error::Other(err.to_string()))?;
+        .map_err(|err| Error::Other(err.to_string()))?;
 
     let serialized_signature =
         serde_json::to_vec(&signature).expect("Failed to serialize signature");
