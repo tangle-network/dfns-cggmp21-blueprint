@@ -1,5 +1,4 @@
 use crate::context::{DfnsContext, DfnsStore, KeygenOutput};
-use blueprint_sdk::contexts::services::ServicesContext;
 use blueprint_sdk::contexts::tangle::TangleClientContext;
 use blueprint_sdk::crypto::tangle_pair_signer::sp_core::ecdsa::Public;
 use blueprint_sdk::event_listeners::tangle::events::TangleEventListener;
@@ -7,18 +6,18 @@ use blueprint_sdk::event_listeners::tangle::services::{
     services_post_processor, services_pre_processor,
 };
 use blueprint_sdk::logging::info;
-use blueprint_sdk::macros::ext::clients::GadgetServicesClient;
-use blueprint_sdk::networking::round_based_compat::NetworkDeliveryWrapper;
-use blueprint_sdk::std::rand::rngs::OsRng;
-use blueprint_sdk::std::rand::RngCore;
+use blueprint_sdk::networking::round_based_compat::{NetworkDeliveryWrapper, NetworkWrapper};
+use blueprint_sdk::std::rand::{rngs::OsRng, RngCore};
 use blueprint_sdk::tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled;
-use blueprint_sdk::{tokio, Error};
-use cggmp21::keygen::ThresholdMsg;
+use blueprint_sdk::Error;
+use cggmp21::keygen::{KeygenBuilder, ThresholdMsg};
 use cggmp21::{
     security_level::SecurityLevel128, supported_curves::Secp256k1, ExecutionId, PregeneratedPrimes,
 };
+use futures::StreamExt;
 use k256::sha2::Sha256;
 use round_based::party::MpcParty;
+use round_based::Delivery;
 use std::collections::BTreeMap;
 
 #[blueprint_sdk::job(
@@ -52,7 +51,7 @@ pub async fn keygen(t: u16, context: DfnsContext) -> Result<Vec<u8>, Error> {
         .await?
         .get_party_index_and_operators()
         .await
-        .map_err(|e| KeygenError::ContextError(e.to_string()))?;
+        .map_err(|e| Error::Other(format!("Context error: {e}")))?;
 
     let parties: BTreeMap<u16, Public> = operators
         .into_iter()
@@ -65,7 +64,7 @@ pub async fn keygen(t: u16, context: DfnsContext) -> Result<Vec<u8>, Error> {
         .await?
         .blueprint_id()
         .await
-        .map_err(|e| KeygenError::ContextError(e.to_string()))?;
+        .map_err(|e| Error::Other(format!("Context error: {e}")))?;
     let call_id = context.call_id.expect("Call ID not found");
     let n = parties.len();
 
@@ -80,16 +79,24 @@ pub async fn keygen(t: u16, context: DfnsContext) -> Result<Vec<u8>, Error> {
 
     // Initialize RNG and network
     let mut rng = OsRng;
-    let delivery =
-        setup_network_party(&context, party_index, deterministic_hash, parties.clone()).await;
+    let delivery = NetworkDeliveryWrapper::new(
+        context.network_mux().clone(),
+        party_index as u16,
+        deterministic_hash,
+        parties.clone(),
+    );
     let party = MpcParty::connected(delivery);
     // Execute the MPC protocol
-    let result = cggmp21::keygen::<Secp256k1>(execution_id, party_index as u16, n as u16)
-        .set_threshold(t)
-        .enforce_reliable_broadcast(false)
-        .start(&mut rng, party)
-        .await
-        .map_err(|e| KeygenError::MpcError(e.to_string()))?;
+    let result = KeygenBuilder::<Secp256k1, SecurityLevel128, Sha256>::new(
+        execution_id,
+        party_index as u16,
+        n as u16,
+    )
+    .set_threshold(t)
+    .enforce_reliable_broadcast(false)
+    .start(&mut rng, party)
+    .await
+    .map_err(|e| Error::Custom(format!("MPC protocol error: {e}")))?;
 
     info!("[Long task] Running pregenerated primes for party {party_index}");
 
@@ -116,11 +123,11 @@ pub async fn keygen(t: u16, context: DfnsContext) -> Result<Vec<u8>, Error> {
 
     // Serialize the results
     let public_key = serde_json::to_vec(&result.shared_public_key)
-        .map_err(|e| KeygenError::SerializationError(e.to_string()))?;
+        .map_err(|e| Error::Custom(format!("Failed to serialize data: {e}")))?;
 
     // Serialize the share (currently unused but kept for potential future use)
     let _serializable_share = serde_json::to_vec(&result.into_inner())
-        .map_err(|e| KeygenError::SerializationError(e.to_string()))?;
+        .map_err(|e| Error::Custom(format!("Failed to serialize data: {e}")))?;
 
     Ok(public_key)
 }
@@ -128,43 +135,6 @@ pub async fn keygen(t: u16, context: DfnsContext) -> Result<Vec<u8>, Error> {
 /// Configuration constants for the DFNS keygen process
 const KEYGEN_SALT: &str = "dfns-keygen";
 const META_SALT: &str = "dfns";
-
-/// Error type for keygen-specific operations
-#[derive(Debug, thiserror::Error)]
-pub enum KeygenError {
-    #[error("Failed to serialize data: {0}")]
-    SerializationError(String),
-
-    #[error("MPC protocol error: {0}")]
-    MpcError(String),
-
-    #[error("Aux info error: {0}")]
-    AuxInfoError(String),
-
-    #[error("Context error: {0}")]
-    ContextError(String),
-}
-
-impl From<KeygenError> for Error {
-    fn from(err: KeygenError) -> Self {
-        Error::Other(err.to_string())
-    }
-}
-
-#[macro_export]
-macro_rules! compute_sha256_hash {
-    ($($data:expr),*) => {
-        {
-            use k256::sha2::{Digest, Sha256};
-            let mut hasher = Sha256::default();
-            $(hasher.update($data);)*
-            let result = hasher.finalize();
-            let mut hash = [0u8; 32];
-            hash.copy_from_slice(result.as_slice());
-            hash
-        }
-    };
-}
 
 /// Helper function to compute deterministic hashes for the keygen process
 pub(crate) fn compute_deterministic_hashes(
@@ -208,6 +178,6 @@ async fn generate_pregenerated_primes<R: RngCore + Send + 'static>(
         cggmp21::PregeneratedPrimes::<SecurityLevel128>::generate(&mut rng)
     })
     .await
-    .map_err(|err| format!("Failed to generate pregenerated primes: {err:?}"))?;
+    .map_err(|err| Error::Other(format!("Failed to generate pregenerated primes: {err:?}")))?;
     Ok(pregenerated_primes)
 }

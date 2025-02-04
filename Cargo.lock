@@ -4208,6 +4208,7 @@ dependencies = [
  "blueprint-sdk",
  "cggmp21",
  "color-eyre",
+ "futures",
  "hex",
  "k256",
  "key-share",

@@ -19,6 +19,7 @@ round-based = { version = "0.4.1", features = ["runtime-tokio"] }
 key-share = { version = "0.6.0", features = ["serde"] }
 tracing-subscriber = "0.3.18"
 thiserror = "2.0.3"
+futures = "0.3"
 
 [build-dependencies]
 blueprint-sdk = { git = "https://github.com/tangle-network/gadget/", features = ["build"] }

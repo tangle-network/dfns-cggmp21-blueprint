@@ -1,6 +1,4 @@
-use crate::compute_sha256_hash;
 use crate::context::DfnsContext;
-use crate::keygen::KeygenError;
 use blueprint_sdk::contexts::tangle::TangleClientContext;
 use blueprint_sdk::crypto::tangle_pair_signer::sp_core::ecdsa::Public;
 use blueprint_sdk::event_listeners::tangle::events::TangleEventListener;
@@ -8,19 +6,18 @@ use blueprint_sdk::event_listeners::tangle::services::{
     services_post_processor, services_pre_processor,
 };
 use blueprint_sdk::logging::info;
-use blueprint_sdk::macros::ext::clients::GadgetServicesClient;
-use blueprint_sdk::networking::round_based_compat::NetworkDeliveryWrapper;
-use blueprint_sdk::std::rand::rngs::OsRng;
+use blueprint_sdk::networking::round_based_compat::{NetworkDeliveryWrapper, NetworkWrapper};
+use blueprint_sdk::std::rand::{rngs::OsRng, RngCore};
 use blueprint_sdk::tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled;
 use blueprint_sdk::Error;
 use cggmp21::key_refresh::{AuxOnlyMsg, KeyRefreshBuilder};
-use cggmp21::security_level::SecurityLevel128;
-use cggmp21::supported_curves::Secp256k1;
-use cggmp21::{ExecutionId, KeyShare};
-use color_eyre::eyre::OptionExt;
+use cggmp21::{
+    security_level::SecurityLevel128, supported_curves::Secp256k1, ExecutionId, KeyShare,
+};
+use futures::StreamExt;
 use k256::sha2::Sha256;
-use round_based::runtime::TokioRuntime;
-use round_based::MpcParty;
+use round_based::party::MpcParty;
+use round_based::Delivery;
 use std::collections::BTreeMap;
 
 #[blueprint_sdk::job(
@@ -38,67 +35,79 @@ pub async fn key_refresh(keygen_call_id: u64, context: DfnsContext) -> Result<Ve
         .tangle_client()
         .await?
         .get_party_index_and_operators()
-        .await?;
+        .await
+        .map_err(|e| Error::Other(format!("Context error: {e}")))?;
     let parties: BTreeMap<u16, Public> = operators
         .into_iter()
         .enumerate()
         .map(|(j, (_, ecdsa))| (j as u16, ecdsa))
         .collect();
-    let blueprint_id = context.tangle_client().await?.blueprint_id().await?;
+    let tangle_client = context
+        .tangle_client()
+        .await
+        .map_err(|e| Error::Other(e.to_string()))?;
+    let blueprint_id = tangle_client
+        .await?
+        .blueprint_id()
+        .await
+        .map_err(|e| Error::Other(e.to_string()))?;
     let call_id = context.call_id.expect("Call ID not found");
     let n = parties.len();
     let (meta_hash, deterministic_hash) =
         crate::keygen::compute_deterministic_hashes(n as u16, blueprint_id, keygen_call_id);
     let store_key = hex::encode(meta_hash);
     info!("DFNS-Refresh: Store key for {i}: {store_key}");
-    let mut state = context
+    let state = context
         .store
         .get(&store_key)
-        .ok_or_eyre("[key refresh] Keygen output not found in DB")?;
+        .ok_or_else(|| Error::Other("[key refresh] Keygen output not found in DB".to_string()))?;
 
     let mut rng = OsRng;
-    let deterministic_hash = compute_sha256_hash!(deterministic_hash, "aux-info");
+    let deterministic_hash = Sha256::digest(deterministic_hash).to_vec();
     let execution_id = ExecutionId::new(&deterministic_hash);
-    let delivery = NetworkDeliveryWrapper::<AuxOnlyMsg<k256::sha2::Sha256, SecurityLevel128>>::new(
-        context.network_backend.clone(),
-        i as _,
+
+    let delivery = NetworkDeliveryWrapper::new(
+        context.network_mux().clone(),
+        i as u16,
         deterministic_hash,
         parties.clone(),
     );
 
-    let keygen_output = state.inner.as_ref().ok_or_eyre("Keygen output not found")?;
-    let pregenerated_primes = keygen_output.pregenerated_primes.clone();
-    let keygen_result = keygen_output.public_key.clone();
-    let party = MpcParty::connected(delivery);
+    let party = round_based::party::MpcParty::connected(delivery).set_runtime(TokioRuntime);
 
     info!(
         "Starting DFNS-CGGMP21 AUX/Key Refresh #{call_id} for party {i}, n={n}, eid={}",
         hex::encode(execution_id.as_bytes())
     );
 
+    let keygen_output = state
+        .inner
+        .as_ref()
+        .ok_or_else(|| Error::Other("Keygen output not found".to_string()))?;
+
     let aux_info = cggmp21::key_refresh::AuxInfoGenerationBuilder::new_aux_gen(
         execution_id,
         i as _,
         n as _,
-        pregenerated_primes,
+        keygen_output.pregenerated_primes.clone(),
     )
     .start(&mut rng, party)
     .await
-    .map_err(|e| KeygenError::MpcError(e.to_string()))?;
+    .map_err(|e| Error::Other(format!("Failed to generate aux info: {}", e)))?;
 
-    let keyshare = KeyShare::from_parts((keygen_result, aux_info))
-        .map_err(|e| KeygenError::AuxInfoError(e.to_string()))?;
+    let keyshare = KeyShare::from_parts((keygen_output.public_key.clone(), aux_info))
+        .map_err(|e| Error::Other(format!("Failed to create keyshare: {}", e)))?;
     state.keyshare = Some(keyshare.clone());
 
     context.store.set(&store_key, state.clone());
 
     // Even though we are using the keygen hash function (in order to get the store key for the meta_hash value), we need to ensure
     // uniqueness of the EID by adding in more elements to the hash
-    let deterministic_hash = compute_sha256_hash!(
-        deterministic_hash,
-        call_id.to_be_bytes(),
-        "dfns-key-refresh"
-    );
+    let deterministic_hash = Sha256::digest(deterministic_hash)
+        .chain(call_id.to_be_bytes())
+        .chain(b"dfns-key-refresh")
+        .finalize()
+        .to_vec();
 
     let eid = ExecutionId::new(&deterministic_hash);
 
@@ -107,20 +116,11 @@ pub async fn key_refresh(keygen_call_id: u64, context: DfnsContext) -> Result<Ve
         hex::encode(eid.as_bytes())
     );
 
-    let delivery = NetworkDeliveryWrapper::new(
-        context.network_backend.clone(),
-        i as _,
-        deterministic_hash,
-        parties,
-    );
+    let delivery =
+        NetworkDeliveryWrapper::new(context.network_mux().clone(), i as u16, eid, parties);
     let party = round_based::party::MpcParty::connected(delivery).set_runtime(TokioRuntime);
 
     let store_key = hex::encode(meta_hash);
-
-    let keygen_output = state
-        .inner
-        .as_ref()
-        .ok_or_eyre("[key-refresh] Keygen output not found")?;
 
     let pregenerated_primes = keygen_output.pregenerated_primes.clone();
 
