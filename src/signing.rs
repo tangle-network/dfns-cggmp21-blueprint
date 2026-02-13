@@ -41,6 +41,24 @@ pub async fn signing(
         .enumerate()
         .map(|(idx, peer_id)| (idx as PartyIndex, peer_id))
         .collect();
+    let blueprint_id = context.blueprint_id()?;
+    let call_id = context.call_id.expect("Call ID not found");
+    let n = parties.len();
+
+    let (meta_hash, deterministic_hash) =
+        crate::keygen::compute_deterministic_hashes(n as u16, blueprint_id, keygen_call_id);
+    let store_key = hex::encode(meta_hash);
+
+    let state = context
+        .store
+        .get(&store_key)
+        .ok_or_eyre("[signing] Keygen output not found in DB")?;
+
+    // Even though we are using the keygen hash function (in order to get the store key for the meta_hash value), we need to ensure
+    // uniqueness of the EID by adding in more elements to the hash
+    let deterministic_hash =
+        compute_sha256_hash!(deterministic_hash, call_id.to_be_bytes(), "dfns-signing");
+    let eid = ExecutionId::new(&deterministic_hash);
 
     let blueprint_id = ctx.blueprint_id()?;
     let call_id = 0u64;

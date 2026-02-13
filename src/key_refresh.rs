@@ -41,6 +41,32 @@ pub async fn key_refresh(
         .enumerate()
         .map(|(idx, peer_id)| (idx as PartyIndex, peer_id))
         .collect();
+    let blueprint_id = context.blueprint_id()?;
+    let call_id = context.call_id.expect("Call ID not found");
+    let n = parties.len();
+    let (meta_hash, deterministic_hash) =
+        crate::keygen::compute_deterministic_hashes(n as u16, blueprint_id, keygen_call_id);
+    let store_key = hex::encode(meta_hash);
+    gadget_sdk::info!("DFNS-Refresh: Store key for {i}: {store_key}");
+    let mut state = context
+        .store
+        .get(&store_key)
+        .ok_or_eyre("[key refresh] Keygen output not found in DB")?;
+
+    let mut rng = OsRng;
+    let deterministic_hash = compute_sha256_hash!(deterministic_hash, "aux-info");
+    let execution_id = ExecutionId::new(&deterministic_hash);
+    let delivery = NetworkDeliveryWrapper::<AuxOnlyMsg<k256::sha2::Sha256, SecurityLevel128>>::new(
+        context.network_backend.clone(),
+        i as _,
+        deterministic_hash,
+        parties.clone(),
+    );
+
+    let keygen_output = state.inner.as_ref().ok_or_eyre("Keygen output not found")?;
+    let pregenerated_primes = keygen_output.pregenerated_primes.clone();
+    let keygen_result = keygen_output.public_key.clone();
+    let party = MpcParty::connected(delivery);
 
     let blueprint_id = ctx.blueprint_id()?;
     let call_id = 0u64;
