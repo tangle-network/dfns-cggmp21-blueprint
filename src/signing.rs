@@ -1,7 +1,7 @@
 use crate::context::dfns_ctx;
 use crate::{SignRequest, SignResult};
-use cggmp21::supported_curves::Secp256k1;
-use cggmp21::{DataToSign, ExecutionId};
+use cggmp24::supported_curves::Secp256k1;
+use cggmp24::{DataToSign, ExecutionId};
 use blueprint_sdk::crypto::k256::K256Ecdsa;
 use blueprint_sdk::networking::round_based_compat::RoundBasedNetworkAdapter;
 use blueprint_sdk::tangle::extract::{Caller, TangleArg, TangleResult};
@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 const SIGNING_SALT: &str = "dfns-signing";
 
-/// Runs a signing protocol using DFNS-CGGMP21. Returns the signature.
+/// Runs a signing protocol using DFNS-CGGMP24. Returns the signature.
 pub async fn signing(
     Caller(_caller): Caller,
     TangleArg(request): TangleArg<SignRequest>,
@@ -50,26 +50,26 @@ pub async fn signing(
     let execution_id = ExecutionId::new(&deterministic_hash);
 
     info!(
-        "Starting DFNS-CGGMP21 Signing for party {i}, n={party_count}, eid={}",
+        "Starting DFNS-CGGMP24 Signing for party {i}, n={party_count}, eid={}",
         hex::encode(execution_id.as_bytes())
     );
 
     let mut rng = rand_chacha::ChaChaRng::from_seed(deterministic_hash);
 
-    // Look up refreshed key
+    // Look up full key share
     let key = hex::encode(meta_hash);
-    let keygen_output = ctx
+    let key_share = ctx
         .store
         .get(&key)
         .map_err(|e| format!("Store error: {e}"))?
-        .ok_or_else(|| "Keygen output not found in DB".to_string())?
-        .refreshed_key
-        .ok_or_else(|| "Refreshed key not found".to_string())?;
+        .ok_or_else(|| "Key store entry not found in DB".to_string())?
+        .key_share
+        .ok_or_else(|| "Full key share not found (run key_refresh first)".to_string())?;
 
     // Use all parties for signing
     let participants: Vec<u16> = (0..party_count).collect();
 
-    type SignMsg = cggmp21::signing::msg::Msg<Secp256k1, Sha256>;
+    type SignMsg = cggmp24::signing::msg::Msg<Secp256k1, Sha256>;
 
     let network = RoundBasedNetworkAdapter::<SignMsg, K256Ecdsa>::new(
         ctx.network_backend.clone(),
@@ -82,13 +82,13 @@ pub async fn signing(
 
     let message = DataToSign::<Secp256k1>::digest::<Sha256>(&message_to_sign);
 
-    let signature = cggmp21::signing(execution_id, i as _, &participants, &keygen_output)
-        .sign(&mut rng, party, message)
+    let signature = cggmp24::signing(execution_id, i as _, &participants, &key_share)
+        .sign(&mut rng, party, &message)
         .await
         .map_err(|err| format!("Signing MPC error: {err}"))?;
 
     // Verify the signature
-    let public_key = &keygen_output.shared_public_key;
+    let public_key = &key_share.shared_public_key;
     signature
         .verify(public_key, &message)
         .map_err(|err| format!("Signature verification failed: {err}"))?;

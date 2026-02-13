@@ -1,19 +1,18 @@
-use cggmp21::security_level::SecurityLevel128;
-use cggmp21::supported_curves::Secp256k1;
-use cggmp21::KeyShare;
+use cggmp24::security_level::SecurityLevel128;
+use cggmp24::supported_curves::Secp256k1;
+use cggmp24::{IncompleteKeyShare, KeyShare};
 use blueprint_sdk::clients::BlueprintServicesClient;
 use blueprint_sdk::contexts::tangle::TangleClientContext;
 use blueprint_sdk::crypto::k256::K256Ecdsa;
 use blueprint_sdk::networking::service_handle::NetworkServiceHandle;
 use blueprint_sdk::runner::config::BlueprintEnvironment;
 use blueprint_sdk::stores::local_database::LocalDatabase;
-use key_share::CoreKeyShare;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
 /// The network protocol version for the DFNS service
-pub(crate) const NETWORK_PROTOCOL: &str = "dfns/cggmp21/1.0.0";
+pub(crate) const NETWORK_PROTOCOL: &str = "dfns/cggmp24/1.0.0";
 
 /// Global DFNS context, initialized once at startup.
 static DFNS_CTX: OnceLock<DfnsContext> = OnceLock::new();
@@ -26,13 +25,13 @@ pub fn dfns_ctx() -> &'static DfnsContext {
 /// Storage structure for DFNS-related data
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct DfnsStore {
-    /// The core key share for the current session
-    pub inner: Option<CoreKeyShare<Secp256k1>>,
-    /// Refreshed key share after a refresh operation
-    pub refreshed_key: Option<KeyShare<Secp256k1, SecurityLevel128>>,
+    /// The incomplete key share from keygen (before aux info)
+    pub incomplete_key_share: Option<IncompleteKeyShare<Secp256k1>>,
+    /// The full key share (after aux info generation)
+    pub key_share: Option<KeyShare<Secp256k1, SecurityLevel128>>,
 }
 
-/// DFNS-CGGMP21 Service Context
+/// DFNS-CGGMP24 Service Context
 #[derive(Clone)]
 pub struct DfnsContext {
     pub env: BlueprintEnvironment,

@@ -1,9 +1,9 @@
 use crate::context::{dfns_ctx, DfnsStore};
 use crate::{KeygenRequest, KeygenResult};
-use cggmp21::keygen::NonThresholdMsg;
-use cggmp21::security_level::SecurityLevel128;
-use cggmp21::supported_curves::Secp256k1;
-use cggmp21::ExecutionId;
+use cggmp24::keygen::NonThresholdMsg;
+use cggmp24::security_level::SecurityLevel128;
+use cggmp24::supported_curves::Secp256k1;
+use cggmp24::ExecutionId;
 use blueprint_sdk::crypto::k256::K256Ecdsa;
 use blueprint_sdk::networking::round_based_compat::RoundBasedNetworkAdapter;
 use blueprint_sdk::tangle::extract::{Caller, TangleArg, TangleResult};
@@ -16,7 +16,8 @@ use std::collections::HashMap;
 
 const KEYGEN_SALT: &str = "dfns-keygen";
 
-/// Runs a distributed key generation (DKG) process using DFNS-CGGMP21 protocol.
+/// Runs a distributed key generation (DKG) process using DFNS-CGGMP24 protocol.
+/// Returns an incomplete key share. Run key_refresh (aux info gen) to complete it.
 pub async fn keygen(
     Caller(_caller): Caller,
     TangleArg(request): TangleArg<KeygenRequest>,
@@ -52,7 +53,7 @@ pub async fn keygen(
     let execution_id = ExecutionId::new(&deterministic_hash);
 
     info!(
-        "Starting DFNS-CGGMP21 Keygen for party {i}, n={party_count}, eid={}",
+        "Starting DFNS-CGGMP24 Keygen for party {i}, n={party_count}, eid={}",
         hex::encode(execution_id.as_bytes())
     );
 
@@ -69,28 +70,28 @@ pub async fn keygen(
 
     let party = MpcParty::connected(network);
 
-    let result = cggmp21::keygen::<Secp256k1>(execution_id, i, party_count)
+    let incomplete_key_share = cggmp24::keygen::<Secp256k1>(execution_id, i, party_count)
         .start(&mut rng, party)
         .await
         .map_err(|e| format!("Keygen MPC error: {e}"))?;
 
     info!(
-        "Ending DFNS-CGGMP21 Keygen for party {i}, n={party_count}, eid={}",
+        "Ending DFNS-CGGMP24 Keygen for party {i}, n={party_count}, eid={}",
         hex::encode(execution_id.as_bytes())
     );
 
-    // Store the results
+    // Store the incomplete key share
     let store_key = hex::encode(meta_hash);
     let _ = ctx.store.set(
         &store_key,
         DfnsStore {
-            inner: Some(result.clone()),
-            refreshed_key: None,
+            incomplete_key_share: Some(incomplete_key_share.clone()),
+            key_share: None,
         },
     );
 
     let public_key =
-        serde_json::to_vec(&result.shared_public_key).map_err(|e| e.to_string())?;
+        serde_json::to_vec(&incomplete_key_share.shared_public_key).map_err(|e| e.to_string())?;
 
     Ok(TangleResult(KeygenResult {
         public_key: public_key.into(),

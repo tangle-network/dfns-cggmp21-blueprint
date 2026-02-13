@@ -29,8 +29,7 @@ rand_chacha = "0.3"
 sha2 = "0.10"
 
 # MPC specific deps
-cggmp21 = { version = "0.6", features = ["curve-secp256k1"] }
-key-share = { version = "0.6", features = ["serde"] }
+cggmp24 = { version = "0.7.0-alpha.3", features = ["curve-secp256k1"] }
 
 [dev-dependencies]
 blueprint-sdk = { git = "https://github.com/tangle-network/blueprint.git", branch = "main", default-features = false, features = ["std", "tangle", "testing", "networking", "round-based-compat"] }
