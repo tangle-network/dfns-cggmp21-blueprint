@@ -43,16 +43,6 @@ pub async fn keygen(
         .enumerate()
         .map(|(idx, peer_id)| (idx as PartyIndex, peer_id))
         .collect();
-    // Get configuration and compute deterministic values
-    let blueprint_id = context
-        .blueprint_id()
-        .map_err(|e| KeygenError::ContextError(e.to_string()))?;
-    let call_id = context.call_id.expect("Call ID not found");
-    let n = parties.len();
-
-    let (meta_hash, deterministic_hash) =
-        compute_deterministic_hashes(n as u16, blueprint_id, call_id);
-    let execution_id = ExecutionId::new(&deterministic_hash);
 
     let blueprint_id = ctx.blueprint_id()?;
     let call_id = 0u64; // Deterministic from on-chain context
@@ -94,12 +84,8 @@ pub async fn keygen(
     let _ = ctx.store.set(
         &store_key,
         DfnsStore {
-            inner: Some(KeygenOutput {
-                pregenerated_primes,
-                public_key: result.clone(),
-            }),
+            inner: Some(result.clone()),
             refreshed_key: None,
-            keyshare: None,
         },
     );
 
@@ -109,15 +95,4 @@ pub async fn keygen(
     Ok(TangleResult(KeygenResult {
         public_key: public_key.into(),
     }))
-}
-
-async fn generate_pregenerated_primes<R: RngCore + Send + 'static>(
-    mut rng: R,
-) -> Result<PregeneratedPrimes, gadget_sdk::Error> {
-    let pregenerated_primes = tokio::task::spawn_blocking(move || {
-        cggmp21::PregeneratedPrimes::<SecurityLevel128>::generate(&mut rng)
-    })
-    .await
-    .map_err(|err| format!("Failed to generate pregenerated primes: {err:?}"))?;
-    Ok(pregenerated_primes)
 }
