@@ -1,39 +1,58 @@
-use color_eyre::Result;
+use blueprint_sdk::contexts::tangle::TangleClientContext;
+use blueprint_sdk::runner::BlueprintRunner;
+use blueprint_sdk::runner::config::BlueprintEnvironment;
+use blueprint_sdk::runner::tangle::config::TangleConfig;
+use blueprint_sdk::tangle::{TangleConsumer, TangleProducer};
+use blueprint_sdk::info;
 use dfns_cggmp21_blueprint::context::DfnsContext;
-use gadget_sdk::info;
-use gadget_sdk::runners::tangle::TangleConfig;
-use gadget_sdk::runners::BlueprintRunner;
-use sp_core::Pair;
+use dfns_cggmp21_blueprint::router;
 
-#[gadget_sdk::main(env)]
-async fn main() {
-    let context = DfnsContext::new(env.clone())?;
+#[tokio::main]
+async fn main() -> Result<(), blueprint_sdk::Error> {
+    setup_log();
 
-    info!(
-        "Starting the Blueprint Runner for {} ...",
-        hex::encode(context.identity.public().as_ref())
-    );
+    let env = BlueprintEnvironment::load()?;
 
-    info!("~~~ Executing the DFNS-CGGMP21 blueprint ~~~");
+    DfnsContext::init(&env)
+        .await
+        .map_err(|e| blueprint_sdk::Error::Other(e))?;
 
+    let tangle_client = env
+        .tangle_client()
+        .await
+        .map_err(|e| blueprint_sdk::Error::Other(e.to_string()))?;
+
+    let service_id = env
+        .protocol_settings
+        .tangle()
+        .map_err(|e| blueprint_sdk::Error::Other(e.to_string()))?
+        .service_id
+        .ok_or_else(|| blueprint_sdk::Error::Other("SERVICE_ID missing".into()))?;
+
+    info!("Starting DFNS-CGGMP21 blueprint for service {service_id}");
+
+    let tangle_producer = TangleProducer::new(tangle_client.clone(), service_id);
+    let tangle_consumer = TangleConsumer::new(tangle_client);
     let tangle_config = TangleConfig::default();
-    let keygen =
-        dfns_cggmp21_blueprint::keygen::KeygenEventHandler::new(&env, context.clone()).await?;
 
-    let key_refresh =
-        dfns_cggmp21_blueprint::key_refresh::KeyRefreshEventHandler::new(&env, context.clone())
-            .await?;
-
-    let signing =
-        dfns_cggmp21_blueprint::signing::SigningEventHandler::new(&env, context.clone()).await?;
-
-    BlueprintRunner::new(tangle_config, env.clone())
-        .job(keygen)
-        .job(key_refresh)
-        .job(signing)
+    BlueprintRunner::builder(tangle_config, env)
+        .router(router())
+        .producer(tangle_producer)
+        .consumer(tangle_consumer)
+        .with_shutdown_handler(async {
+            info!("Shutting down DFNS-CGGMP21 blueprint");
+        })
         .run()
         .await?;
 
-    info!("Exiting...");
     Ok(())
+}
+
+fn setup_log() {
+    use tracing_subscriber::prelude::*;
+    use tracing_subscriber::{EnvFilter, fmt};
+    let _ = tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(EnvFilter::from_default_env())
+        .try_init();
 }

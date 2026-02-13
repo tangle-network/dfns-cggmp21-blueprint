@@ -1,24 +1,27 @@
 use cggmp21::security_level::SecurityLevel128;
 use cggmp21::supported_curves::Secp256k1;
 use cggmp21::KeyShare;
-use color_eyre::eyre;
-use gadget_sdk as sdk;
-use gadget_sdk::ext::subxt::tx::Signer;
-use gadget_sdk::network::NetworkMultiplexer;
-use gadget_sdk::store::LocalDatabase;
-use gadget_sdk::subxt_core::ext::sp_core::ecdsa;
-use gadget_sdk::subxt_core::utils::AccountId32;
+use blueprint_sdk::clients::BlueprintServicesClient;
+use blueprint_sdk::contexts::tangle::TangleClientContext;
+use blueprint_sdk::crypto::k256::K256Ecdsa;
+use blueprint_sdk::networking::service_handle::NetworkServiceHandle;
+use blueprint_sdk::runner::config::BlueprintEnvironment;
+use blueprint_sdk::stores::local_database::LocalDatabase;
 use key_share::CoreKeyShare;
-use sdk::contexts::{KeystoreContext, ServicesContext, TangleClientContext};
-use sdk::tangle_subxt::tangle_testnet_runtime::api;
 use serde::{Deserialize, Serialize};
-use sp_core::ecdsa::Public;
-use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 /// The network protocol version for the DFNS service
-const NETWORK_PROTOCOL: &str = "/dfns/cggmp21/1.0.0";
+pub(crate) const NETWORK_PROTOCOL: &str = "dfns/cggmp21/1.0.0";
+
+/// Global DFNS context, initialized once at startup.
+static DFNS_CTX: OnceLock<DfnsContext> = OnceLock::new();
+
+/// Get the global DFNS context. Panics if not initialized.
+pub fn dfns_ctx() -> &'static DfnsContext {
+    DFNS_CTX.get().expect("DfnsContext not initialized")
+}
 
 /// Storage structure for DFNS-related data
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -29,156 +32,61 @@ pub struct DfnsStore {
     pub refreshed_key: Option<KeyShare<Secp256k1, SecurityLevel128>>,
 }
 
-/// DFNS-CGGMP21 Service Context that holds all the necessary context for the service
-/// to run. This structure implements various traits for keystore, client, and service
-/// functionality.
-#[derive(Clone, KeystoreContext, TangleClientContext, ServicesContext)]
+/// DFNS-CGGMP21 Service Context
+#[derive(Clone)]
 pub struct DfnsContext {
-    #[config]
-    pub config: sdk::config::StdGadgetConfiguration,
-    #[call_id]
-    pub call_id: Option<u64>,
-    pub network_backend: Arc<NetworkMultiplexer>,
+    pub env: BlueprintEnvironment,
+    pub network_backend: NetworkServiceHandle<K256Ecdsa>,
     pub store: Arc<LocalDatabase<DfnsStore>>,
-    pub identity: ecdsa::Pair,
 }
 
-// Core context management implementation
 impl DfnsContext {
-    /// Creates a new service context with the provided configuration
-    ///
-    /// # Errors
-    /// Returns an error if:
-    /// - Network initialization fails
-    /// - Configuration is invalid
-    pub fn new(config: sdk::config::StdGadgetConfiguration) -> eyre::Result<Self> {
-        let network_config = config
-            .libp2p_network_config(NETWORK_PROTOCOL)
-            .map_err(|err| eyre::eyre!("Failed to create network configuration: {err}"))?;
+    /// Creates and globally initializes the DFNS context.
+    pub async fn init(env: &BlueprintEnvironment) -> Result<(), String> {
+        let tangle_client = env.tangle_client().await.map_err(|e| e.to_string())?;
 
-        let identity = network_config.ecdsa_key.clone();
-        let gossip_handle = sdk::network::setup::start_p2p_network(network_config)
-            .map_err(|err| eyre::eyre!("Failed to start the P2P network: {err}"))?;
+        let operators = tangle_client
+            .get_operators()
+            .await
+            .map_err(|e| e.to_string())?;
 
-        let keystore_dir = PathBuf::from(config.keystore_uri.clone()).join("dfns.json");
-        let store = Arc::new(LocalDatabase::open(keystore_dir));
+        let operator_keys =
+            blueprint_sdk::networking::service::AllowedKeys::<K256Ecdsa>::EvmAddresses(
+                operators.keys().cloned().collect(),
+            );
 
-        Ok(Self {
-            store,
-            call_id: None,
-            identity,
-            config,
-            network_backend: Arc::new(NetworkMultiplexer::new(gossip_handle)),
-        })
-    }
+        let (_allowed_keys_tx, allowed_keys_rx) = crossbeam_channel::unbounded();
 
-    /// Returns a reference to the configuration
-    #[inline]
-    pub fn config(&self) -> &sdk::config::StdGadgetConfiguration {
-        &self.config
-    }
+        let network_config = env
+            .libp2p_network_config::<K256Ecdsa>(NETWORK_PROTOCOL, false)
+            .map_err(|e| e.to_string())?;
 
-    /// Returns a clone of the store handle
-    #[inline]
-    pub fn store(&self) -> Arc<LocalDatabase<DfnsStore>> {
-        self.store.clone()
-    }
+        let network_backend = env
+            .libp2p_start_network(network_config, operator_keys, allowed_keys_rx)
+            .map_err(|e| e.to_string())?;
 
-    /// Returns the network protocol version
-    #[inline]
-    pub fn network_protocol(&self) -> &str {
-        NETWORK_PROTOCOL
-    }
-}
-
-// Protocol-specific implementations
-impl DfnsContext {
-    /// Retrieves the current blueprint ID from the configuration
-    ///
-    /// # Errors
-    /// Returns an error if the blueprint ID is not found in the configuration
-    pub fn blueprint_id(&self) -> eyre::Result<u64> {
-        self.config()
-            .protocol_specific
-            .tangle()
-            .map(|c| c.blueprint_id)
-            .map_err(|err| eyre::eyre!("Blueprint ID not found in configuration: {err}"))
-    }
-
-    /// Retrieves the current party index and operator mapping
-    ///
-    /// # Errors
-    /// Returns an error if:
-    /// - Failed to retrieve operator keys
-    /// - Current party is not found in the operator list
-    pub async fn get_party_index_and_operators(
-        &self,
-    ) -> eyre::Result<(usize, BTreeMap<AccountId32, Public>)> {
-        let parties = self.current_service_operators_ecdsa_keys().await?;
-        let my_id = self.config.first_sr25519_signer()?.account_id();
-
-        gadget_sdk::trace!(
-            "Looking for {my_id:?} in parties: {:?}",
-            parties.keys().collect::<Vec<_>>()
+        let keystore_dir = PathBuf::from(&env.keystore_uri).join("dfns.json");
+        let store = Arc::new(
+            LocalDatabase::open(keystore_dir).map_err(|e| format!("Failed to open store: {e}"))?,
         );
 
-        let index_of_my_id = parties
-            .iter()
-            .position(|(id, _)| id == &my_id)
-            .ok_or_else(|| eyre::eyre!("Party not found in operator list"))?;
+        let ctx = DfnsContext {
+            env: env.clone(),
+            network_backend,
+            store,
+        };
 
-        Ok((index_of_my_id, parties))
+        DFNS_CTX
+            .set(ctx)
+            .map_err(|_| "DfnsContext already initialized".to_string())
     }
 
-    /// Retrieves the ECDSA keys for all current service operators
-    ///
-    /// # Errors
-    /// Returns an error if:
-    /// - Failed to connect to the Tangle client
-    /// - Failed to retrieve operator information
-    /// - Missing ECDSA key for any operator
-    pub async fn current_service_operators_ecdsa_keys(
-        &self,
-    ) -> eyre::Result<BTreeMap<AccountId32, ecdsa::Public>> {
-        let client = self.tangle_client().await?;
-        let current_blueprint = self.blueprint_id()?;
-        let current_service_op = self.current_service_operators(&client).await?;
-        let storage = client.storage().at_latest().await?;
-
-        let mut map = BTreeMap::new();
-        for (operator, _) in current_service_op {
-            let addr = api::storage()
-                .services()
-                .operators(current_blueprint, &operator);
-
-            let maybe_pref = storage.fetch(&addr).await.map_err(|err| {
-                eyre::eyre!("Failed to fetch operator storage for {operator}: {err}")
-            })?;
-
-            if let Some(pref) = maybe_pref {
-                map.insert(operator, ecdsa::Public(pref.key));
-            } else {
-                return Err(eyre::eyre!("Missing ECDSA key for operator {operator}"));
-            }
-        }
-
-        Ok(map)
-    }
-
-    /// Retrieves the current call ID for this job
-    ///
-    /// # Errors
-    /// Returns an error if failed to retrieve the call ID from storage
-    pub async fn current_call_id(&self) -> eyre::Result<u64> {
-        let client = self.tangle_client().await?;
-        let addr = api::storage().services().next_job_call_id();
-        let storage = client.storage().at_latest().await?;
-
-        let maybe_call_id = storage
-            .fetch_or_default(&addr)
-            .await
-            .map_err(|err| eyre::eyre!("Failed to fetch current call ID: {err}"))?;
-
-        Ok(maybe_call_id.saturating_sub(1))
+    /// Returns the blueprint ID
+    pub fn blueprint_id(&self) -> Result<u64, String> {
+        self.env
+            .protocol_settings
+            .tangle()
+            .map(|c| c.blueprint_id)
+            .map_err(|err| format!("Blueprint ID not found: {err}"))
     }
 }

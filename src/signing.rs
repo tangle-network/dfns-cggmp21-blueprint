@@ -1,105 +1,102 @@
-use crate::context::DfnsContext;
-use cggmp21::key_share::AnyKeyShare;
-use cggmp21::security_level::SecurityLevel128;
-use cggmp21::signing::SigningBuilder;
+use crate::context::dfns_ctx;
+use crate::{SignRequest, SignResult};
 use cggmp21::supported_curves::Secp256k1;
 use cggmp21::{DataToSign, ExecutionId};
-use color_eyre::eyre::OptionExt;
-use gadget_sdk::event_listener::tangle::jobs::{services_post_processor, services_pre_processor};
-use gadget_sdk::event_listener::tangle::TangleEventListener;
-use gadget_sdk::network::round_based_compat::NetworkDeliveryWrapper;
-use gadget_sdk::random::rand::seq::SliceRandom;
-use gadget_sdk::tangle_subxt::tangle_testnet_runtime::api::services::events::JobCalled;
-use gadget_sdk::{compute_sha256_hash, job};
-use k256::sha2::Sha256;
+use blueprint_sdk::crypto::k256::K256Ecdsa;
+use blueprint_sdk::networking::round_based_compat::RoundBasedNetworkAdapter;
+use blueprint_sdk::tangle::extract::{Caller, TangleArg, TangleResult};
+use blueprint_sdk::info;
 use rand_chacha::rand_core::SeedableRng;
-use sp_core::ecdsa::Public;
-use std::collections::BTreeMap;
+use round_based::PartyIndex;
+use sha2::Sha256;
+use std::collections::HashMap;
 
-#[job(
-    id = 2,
-    params(n, message_to_sign),
-    event_listener(
-        listener = TangleEventListener<DfnsContext, JobCalled>,
-        pre_processor = services_pre_processor,
-        post_processor = services_post_processor,
-    ),
-)]
-/// Runs a [t; n] keygen using DFNS-CGGMP21. Returns the public key
+const SIGNING_SALT: &str = "dfns-signing";
+
+/// Runs a signing protocol using DFNS-CGGMP21. Returns the signature.
 pub async fn signing(
-    n: u16,
-    message_to_sign: Vec<u8>,
-    context: DfnsContext,
-) -> Result<Vec<u8>, gadget_sdk::Error> {
-    let blueprint_id = context.blueprint_id()?;
-    let call_id = context.current_call_id().await?;
-    let meta_deterministic_hash = compute_sha256_hash!(
-        n.to_be_bytes(),
-        blueprint_id.to_be_bytes(),
-        call_id.to_be_bytes(),
-        "dfns"
-    );
-    let deterministic_hash = compute_sha256_hash!(meta_deterministic_hash, "dfns-signing");
-    // TODO: make sure it's okay to have a different execution id for signing vs keygen even if same between for all keygen or all signing
-    let eid = ExecutionId::new(&deterministic_hash);
-    let (i, operators) = context.get_party_index_and_operators().await?;
-    let parties: BTreeMap<u16, Public> = operators
+    Caller(_caller): Caller,
+    TangleArg(request): TangleArg<SignRequest>,
+) -> Result<TangleResult<SignResult>, String> {
+    let ctx = dfns_ctx();
+    let n = request.n;
+    let message_to_sign = request.message_to_sign.to_vec();
+
+    // Get party info from connected peers
+    let mut all_peers = ctx.network_backend.peers();
+    let local_peer_id = ctx.network_backend.local_peer_id;
+    if !all_peers.contains(&local_peer_id) {
+        all_peers.push(local_peer_id);
+    }
+    all_peers.sort();
+
+    let party_count = all_peers.len() as u16;
+    let i = all_peers
+        .iter()
+        .position(|p| *p == local_peer_id)
+        .ok_or_else(|| "Local peer not found in peer list".to_string())? as u16;
+
+    let parties: HashMap<PartyIndex, libp2p::PeerId> = all_peers
         .into_iter()
         .enumerate()
-        .map(|(j, (_, ecdsa))| (j as u16, ecdsa))
+        .map(|(idx, peer_id)| (idx as PartyIndex, peer_id))
         .collect();
 
-    gadget_sdk::info!(
-        "Starting DFNS-CGGMP21 Signing for party {i}, n={n}, eid={}",
-        hex::encode(eid.as_bytes())
+    let blueprint_id = ctx.blueprint_id()?;
+    let call_id = 0u64;
+
+    let (meta_hash, deterministic_hash) =
+        crate::compute_deterministic_hashes(n, blueprint_id, call_id, SIGNING_SALT);
+    let execution_id = ExecutionId::new(&deterministic_hash);
+
+    info!(
+        "Starting DFNS-CGGMP21 Signing for party {i}, n={party_count}, eid={}",
+        hex::encode(execution_id.as_bytes())
     );
 
     let mut rng = rand_chacha::ChaChaRng::from_seed(deterministic_hash);
-    let delivery = NetworkDeliveryWrapper::new(
-        context.network_backend.clone(),
-        i as _,
-        deterministic_hash,
-        parties,
-    );
-    let party = round_based::party::MpcParty::connected(delivery);
 
-    let key = hex::encode(meta_deterministic_hash);
-    let keygen_output = context
+    // Look up refreshed key
+    let key = hex::encode(meta_hash);
+    let keygen_output = ctx
         .store
         .get(&key)
-        .ok_or_eyre("Keygen output not found in DB")?
+        .map_err(|e| format!("Store error: {e}"))?
+        .ok_or_else(|| "Keygen output not found in DB".to_string())?
         .refreshed_key
-        .ok_or_eyre("Keygen output not found")?;
-    // Choose `t` signers to perform signing
-    let t = keygen_output.min_signers();
-    let shares = &keygen_output.public_shares;
-    let mut participants = (0..n).collect::<Vec<_>>();
-    participants.shuffle(&mut rng);
-    let participants = &participants[..usize::from(t)];
-    gadget_sdk::info!("Signers: {participants:?}");
-    let participants_shares = participants.iter().map(|i| &shares[usize::from(*i)]);
+        .ok_or_else(|| "Refreshed key not found".to_string())?;
 
-    // TODO: Parameterize the Curve type
-    let signing = SigningBuilder::<Secp256k1, SecurityLevel128, Sha256>::new(
-        eid,
-        i as _,
-        participants,
-        &keygen_output,
+    // Use all parties for signing
+    let participants: Vec<u16> = (0..party_count).collect();
+
+    type SignMsg = cggmp21::signing::msg::Msg<Secp256k1, Sha256>;
+
+    let network = RoundBasedNetworkAdapter::<SignMsg, K256Ecdsa>::new(
+        ctx.network_backend.clone(),
+        i,
+        &parties,
+        crate::context::NETWORK_PROTOCOL,
     );
-    let message_to_sign = DataToSign::<Secp256k1>::digest::<Sha256>(&message_to_sign);
-    let signature = signing
-        .sign(&mut rng, party, message_to_sign)
+
+    let party = round_based::party::MpcParty::connected(network);
+
+    let message = DataToSign::<Secp256k1>::digest::<Sha256>(&message_to_sign);
+
+    let signature = cggmp21::signing(execution_id, i as _, &participants, &keygen_output)
+        .sign(&mut rng, party, message)
         .await
-        .map_err(|err| gadget_sdk::Error::Other(err.to_string()))?;
+        .map_err(|err| format!("Signing MPC error: {err}"))?;
 
+    // Verify the signature
     let public_key = &keygen_output.shared_public_key;
-
     signature
-        .verify(public_key, &message_to_sign)
-        .map_err(|err| gadget_sdk::Error::Other(err.to_string()))?;
+        .verify(public_key, &message)
+        .map_err(|err| format!("Signature verification failed: {err}"))?;
 
     let serialized_signature =
-        serde_json::to_vec(&signature).expect("Failed to serialize signature");
+        serde_json::to_vec(&signature).map_err(|e| e.to_string())?;
 
-    Ok(serialized_signature)
+    Ok(TangleResult(SignResult {
+        signature: serialized_signature.into(),
+    }))
 }
