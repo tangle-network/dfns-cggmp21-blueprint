@@ -17,6 +17,9 @@ keystores
 
 .direnv
 .DS_Store
+# Solidity dependencies
+dependencies/
+
 # Solc Compiler files
 cache/
 out/
