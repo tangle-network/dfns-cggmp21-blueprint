@@ -1,11 +1,11 @@
 use crate::context::dfns_ctx;
 use crate::{SignRequest, SignResult};
-use cggmp24::supported_curves::Secp256k1;
-use cggmp24::{DataToSign, ExecutionId};
 use blueprint_sdk::crypto::k256::K256Ecdsa;
+use blueprint_sdk::info;
 use blueprint_sdk::networking::round_based_compat::RoundBasedNetworkAdapter;
 use blueprint_sdk::tangle::extract::{Caller, TangleArg, TangleResult};
-use blueprint_sdk::info;
+use cggmp24::supported_curves::Secp256k1;
+use cggmp24::{DataToSign, ExecutionId};
 use rand_chacha::rand_core::SeedableRng;
 use round_based::PartyIndex;
 use sha2::Sha256;
@@ -93,8 +93,7 @@ pub async fn signing(
         .verify(public_key, &message)
         .map_err(|err| format!("Signature verification failed: {err}"))?;
 
-    let serialized_signature =
-        serde_json::to_vec(&signature).map_err(|e| e.to_string())?;
+    let serialized_signature = serde_json::to_vec(&signature).map_err(|e| e.to_string())?;
 
     Ok(TangleResult(SignResult {
         signature: serialized_signature.into(),

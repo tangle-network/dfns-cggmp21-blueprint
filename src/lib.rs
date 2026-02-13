@@ -3,8 +3,8 @@ pub mod key_refresh;
 pub mod keygen;
 pub mod signing;
 
-use blueprint_sdk::crypto::hashing::sha2_256;
 use blueprint_sdk::alloy::sol;
+use blueprint_sdk::crypto::hashing::sha2_256;
 use blueprint_sdk::tangle::TangleLayer;
 use blueprint_sdk::{Job, Router};
 
